@@ -61,7 +61,13 @@ export default function LoginPage() {
       const result = await signInWithEmailAndPassword(auth, email, password);
       await handleInstitutionalRedirect(result.user);
     } catch (err: any) {
-      if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
+      console.error("Login error code:", err.code);
+      // Modern Firebase often uses 'auth/invalid-credential' for both security and user-not-found
+      if (
+        err.code === 'auth/user-not-found' || 
+        err.code === 'auth/wrong-password' || 
+        err.code === 'auth/invalid-credential'
+      ) {
         setError('Account not found or password incorrect. Please sign up first if you are new.');
       } else {
         setError('Login failed. Ensure you have registered your account.');
@@ -118,12 +124,14 @@ export default function LoginPage() {
               <Alert variant="destructive" className="rounded-xl border-destructive/20 bg-destructive/5">
                 <AlertCircle className="h-4 w-4" />
                 <AlertTitle>Login Restriction</AlertTitle>
-                <AlertDescription>{error}</AlertDescription>
-                {error.includes('sign up') && (
-                  <Button variant="link" asChild className="p-0 h-auto text-destructive font-bold mt-2">
-                    <Link href="/signup">Go to Sign Up Page →</Link>
-                  </Button>
-                )}
+                <AlertDescription className="flex flex-col gap-2">
+                  <span>{error}</span>
+                  {error.includes('sign up') && (
+                    <Button variant="link" asChild className="p-0 h-auto text-destructive font-bold justify-start">
+                      <Link href="/signup">Click here to Sign Up →</Link>
+                    </Button>
+                  )}
+                </AlertDescription>
               </Alert>
             )}
 
