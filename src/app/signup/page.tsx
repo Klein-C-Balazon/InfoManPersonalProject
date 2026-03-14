@@ -22,11 +22,11 @@ import { FirestorePermissionError } from '@/firebase/errors';
 import { DEFAULT_COLLEGES } from '@/lib/constants';
 
 export default function SignupPage() {
-  const [email, setEmail] = useState('admin@neu.edu.ph');
-  const [password, setPassword] = useState('123123');
-  const [name, setName] = useState('System Admin');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
   const [collegeId, setCollegeId] = useState('');
-  const [selectedRole, setSelectedRole] = useState<UserRole>('admin');
+  const [selectedRole, setSelectedRole] = useState<UserRole>('user');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -62,6 +62,7 @@ export default function SignupPage() {
       await updateProfile(user, { displayName: name });
 
       let role: UserRole = selectedRole;
+      // Hardcoded admin override for specific system address
       if (email.toLowerCase() === 'admin@neu.edu.ph') {
         role = 'admin';
       }
@@ -150,7 +151,7 @@ export default function SignupPage() {
                       className="flex flex-col items-center justify-between rounded-xl border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer"
                     >
                       <User className="mb-2 h-6 w-6" />
-                      <span className="text-xs font-bold uppercase">Student</span>
+                      <span className="text-xs font-bold uppercase">Student/Teacher</span>
                     </Label>
                   </div>
                   <div>
