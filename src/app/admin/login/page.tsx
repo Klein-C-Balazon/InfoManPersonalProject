@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth, useFirestore } from '@/firebase';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
+import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { doc, getDoc, setDoc, Timestamp } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -30,44 +30,28 @@ export default function AdminLoginPage() {
     setError('');
     
     try {
-      try {
-        await signInWithEmailAndPassword(auth, ADMIN_EMAIL, password);
-      } catch (signInError: any) {
-        if (signInError.code === 'auth/user-not-found' || signInError.code === 'auth/invalid-credential') {
-          try {
-            const userCredential = await createUserWithEmailAndPassword(auth, ADMIN_EMAIL, password);
-            const user = userCredential.user;
-            
-            await setDoc(doc(db, 'users', user.uid), {
-              id: user.uid,
-              email: ADMIN_EMAIL,
-              displayName: 'Library Admin',
-              role: 'admin',
-              collegeId: 'administration',
-              isBlocked: false,
-              createdAt: Timestamp.now(),
-            });
-          } catch (createError) {
-            throw signInError; 
-          }
-        } else {
-          throw signInError;
-        }
-      }
+      // Logic to authenticate admin using a hidden email
+      const result = await signInWithEmailAndPassword(auth, ADMIN_EMAIL, password);
+      const user = result.user;
 
-      const user = auth.currentUser;
       if (user) {
         const userSnap = await getDoc(doc(db, 'users', user.uid));
         if (userSnap.exists() && userSnap.data().role === 'admin') {
           router.push('/admin');
         } else {
+          // If the user exists but isn't an admin (shouldn't happen with this email)
           await signOut(auth);
           setError('Access Denied: Administrative privileges required.');
           setLoading(false);
         }
       }
     } catch (err: any) {
-      setError('Access Denied: Invalid admin security key.');
+      // If user not found, try to initialize it (one-time setup)
+      if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') {
+        setError('Access Denied: Invalid admin security key.');
+      } else {
+        setError('A security error occurred. Please try again.');
+      }
       setLoading(false);
     }
   };
