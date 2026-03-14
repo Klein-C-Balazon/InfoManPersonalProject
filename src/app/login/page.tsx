@@ -113,7 +113,7 @@ export default function LoginPage() {
         }
       }
     } catch (err: any) {
-      setError('Access Denied: Invalid admin security key. If you have changed the security key previously, please use that one.');
+      setError('Access Denied: Invalid admin security key.');
       setLoading(false);
     }
   };
@@ -187,7 +187,7 @@ export default function LoginPage() {
                   <AlertTitle>Access Issue</AlertTitle>
                   <AlertDescription className="flex flex-col gap-2">
                     <span>{error}</span>
-                    {!error.includes('Denied') && !error.includes('key') && (
+                    {!error.includes('Denied') && (
                       <Button variant="link" asChild className="p-0 h-auto text-destructive font-bold justify-start">
                         <Link href="/signup">Click here to Sign Up →</Link>
                       </Button>
@@ -273,7 +273,7 @@ export default function LoginPage() {
                       <input 
                         id="adminPassword" 
                         type="password" 
-                        placeholder="Hint: Admin123" 
+                        placeholder="••••••••" 
                         className="flex h-12 w-full rounded-xl border border-input bg-background px-10 py-2 text-base ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
                         value={adminPassword}
                         onChange={(e) => setAdminPassword(e.target.value)}

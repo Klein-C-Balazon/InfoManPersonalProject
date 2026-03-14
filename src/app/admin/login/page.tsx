@@ -67,7 +67,7 @@ export default function AdminLoginPage() {
         }
       }
     } catch (err: any) {
-      setError('Authentication failed. Ensure you are using the correct admin security key. Hint: Admin123');
+      setError('Authentication failed. Ensure you are using the correct admin security key.');
       setLoading(false);
     }
   };
@@ -109,7 +109,7 @@ export default function AdminLoginPage() {
                   <Input 
                     id="password" 
                     type="password" 
-                    placeholder="Hint: Admin123" 
+                    placeholder="••••••••" 
                     className="pl-10 h-12 rounded-xl bg-slate-900/50 border-white/10 text-white placeholder:text-slate-500 focus:ring-primary/50"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
