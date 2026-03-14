@@ -1,22 +1,72 @@
+
 "use client"
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { auth, db, googleProvider } from '@/lib/firebase';
-import { signInWithPopup, signOut } from 'firebase/auth';
+import { signInWithPopup, signOut, signInWithEmailAndPassword } from 'firebase/auth';
 import { doc, getDoc, setDoc, Timestamp, collection, getDocs, query, limit } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
-import { BookOpen, AlertCircle, GraduationCap } from 'lucide-react';
+import { BookOpen, AlertCircle, GraduationCap, Mail, Lock } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
+import { Separator } from '@/components/ui/separator';
 
 export default function LoginPage() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+
+  const handleInstitutionalRedirect = async (user: any) => {
+    const userRef = doc(db, 'users', user.uid);
+    let userSnap;
+    try {
+      userSnap = await getDoc(userRef);
+    } catch (e: any) {
+      const permissionError = new FirestorePermissionError({
+        path: userRef.path,
+        operation: 'get',
+      });
+      errorEmitter.emit('permission-error', permissionError);
+      throw e;
+    }
+
+    if (userSnap.exists()) {
+      const userData = userSnap.data();
+      if (userData.isBlocked) {
+        await signOut(auth);
+        setError('Your account has been blocked. Please contact the administrator.');
+        setLoading(false);
+        return;
+      }
+      router.push('/dashboard');
+    } else {
+      // If user doesn't exist in Firestore, they must sign up first to set their college
+      await signOut(auth);
+      setError('Account not found. Please sign up first to register your institutional profile.');
+      setLoading(false);
+    }
+  };
+
+  const handleEmailLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    try {
+      const result = await signInWithEmailAndPassword(auth, email, password);
+      await handleInstitutionalRedirect(result.user);
+    } catch (err: any) {
+      setError('Invalid email or password. Please try again.');
+      setLoading(false);
+    }
+  };
 
   const handleGoogleLogin = async () => {
     setLoading(true);
@@ -32,71 +82,11 @@ export default function LoginPage() {
         return;
       }
 
-      const userRef = doc(db, 'users', user.uid);
-      
-      let userSnap;
-      try {
-        userSnap = await getDoc(userRef);
-      } catch (e: any) {
-        const permissionError = new FirestorePermissionError({
-          path: userRef.path,
-          operation: 'get',
-        });
-        errorEmitter.emit('permission-error', permissionError);
-        throw e;
-      }
-
-      if (userSnap.exists()) {
-        const userData = userSnap.data();
-        if (userData.isBlocked) {
-          await signOut(auth);
-          setError('Your account has been blocked. Please contact the administrator.');
-          setLoading(false);
-          return;
-        }
-      } else {
-        // Check if this is the very first user to assign admin role
-        let role: 'admin' | 'user' = 'user';
-        try {
-          const usersQuery = query(collection(db, 'users'), limit(1));
-          const usersSnap = await getDocs(usersQuery);
-          if (usersSnap.empty) {
-            role = 'admin';
-          }
-        } catch (e) {
-          // If we can't check, default to user
-          role = 'user';
-        }
-
-        const newUser = {
-          id: user.uid,
-          email: user.email,
-          displayName: user.displayName,
-          role: role,
-          collegeId: 'Not set',
-          isBlocked: false,
-          createdAt: Timestamp.now(),
-        };
-
-        try {
-          await setDoc(userRef, newUser);
-        } catch (e: any) {
-          const permissionError = new FirestorePermissionError({
-            path: userRef.path,
-            operation: 'create',
-            requestResourceData: newUser,
-          });
-          errorEmitter.emit('permission-error', permissionError);
-          throw e;
-        }
-      }
-
-      router.push('/dashboard');
+      await handleInstitutionalRedirect(user);
     } catch (err: any) {
       if (!(err instanceof FirestorePermissionError)) {
         setError(err.message || 'Institutional login failed.');
       }
-    } finally {
       setLoading(false);
     }
   };
@@ -118,8 +108,8 @@ export default function LoginPage() {
 
         <Card className="shadow-2xl border-primary/5 overflow-hidden rounded-3xl">
           <CardHeader className="bg-primary/5 pb-8 pt-10 text-center">
-            <CardTitle className="text-2xl">Student Access</CardTitle>
-            <CardDescription>Verify your identity to begin your session</CardDescription>
+            <CardTitle className="text-2xl">Access Portal</CardTitle>
+            <CardDescription>Enter your institutional credentials</CardDescription>
           </CardHeader>
           <CardContent className="pt-8 px-8 space-y-6">
             {error && (
@@ -129,16 +119,66 @@ export default function LoginPage() {
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}
+
+            <form onSubmit={handleEmailLogin} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="email">Institutional Email</Label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Input 
+                    id="email" 
+                    type="email" 
+                    placeholder="admin@neu.edu.ph" 
+                    className="pl-10 h-12 rounded-xl"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required 
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="password">Password</Label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Input 
+                    id="password" 
+                    type="password" 
+                    placeholder="••••••••" 
+                    className="pl-10 h-12 rounded-xl"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required 
+                  />
+                </div>
+              </div>
+              <Button 
+                type="submit" 
+                className="w-full h-12 font-semibold rounded-xl" 
+                disabled={loading}
+              >
+                {loading ? 'Authenticating...' : 'Sign In'}
+              </Button>
+            </form>
             
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <Separator className="w-full" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-background px-2 text-muted-foreground">Or continue with</span>
+              </div>
+            </div>
+
             <Button 
               type="button" 
+              variant="outline"
               size="lg"
-              className="w-full h-16 text-lg font-semibold rounded-2xl flex items-center justify-center gap-3 transition-all hover:scale-[1.02] active:scale-[0.98]" 
+              className="w-full h-14 text-md font-semibold rounded-xl flex items-center justify-center gap-3 transition-all hover:bg-secondary/50" 
               onClick={handleGoogleLogin}
               disabled={loading}
             >
-              <GraduationCap className="h-6 w-6" />
-              {loading ? 'Authenticating...' : 'Sign in with Institutional ID'}
+              <GraduationCap className="h-5 w-5" />
+              Sign in with Google Account
             </Button>
 
             <div className="text-center">
@@ -149,9 +189,9 @@ export default function LoginPage() {
           </CardContent>
           <CardFooter className="bg-secondary/20 flex flex-col gap-2 py-6">
             <p className="text-sm text-muted-foreground">
-              Technical issues? Contact IT Support
+              New here? <Link href="/signup" className="text-primary font-medium hover:underline">Create an account</Link>
             </p>
-            <Link href="/" className="text-sm text-primary font-medium hover:underline">
+            <Link href="/" className="text-sm text-muted-foreground hover:underline">
               Return to Homepage
             </Link>
           </CardFooter>
