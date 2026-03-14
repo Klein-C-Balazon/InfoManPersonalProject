@@ -135,7 +135,11 @@ export default function LoginPage() {
 
       await handleInstitutionalRedirect(user);
     } catch (err: any) {
-      setError(err.message || 'Institutional login failed.');
+      if (err.code === 'auth/popup-closed-by-user') {
+        setError('The sign-in popup was closed before completion. Please try again.');
+      } else {
+        setError(err.message || 'Institutional login failed.');
+      }
       setLoading(false);
     }
   };
