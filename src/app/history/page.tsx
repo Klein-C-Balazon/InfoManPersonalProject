@@ -1,46 +1,39 @@
+
 "use client"
 
-import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { collection, query, where, orderBy, getDocs, Timestamp } from 'firebase/firestore';
-import { useUser, useFirestore } from '@/firebase';
+import { collection, query, where, orderBy } from 'firebase/firestore';
+import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { Navbar } from '@/components/navbar';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { History, Loader2, Calendar } from 'lucide-react';
+import { History, Loader2, Calendar, AlertTriangle } from 'lucide-react';
 import { format } from 'date-fns';
 import { VisitLog } from '@/lib/models';
+import { useEffect } from 'react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 export default function HistoryPage() {
   const { user, isUserLoading: loadingAuth } = useUser();
   const db = useFirestore();
-  const [visits, setVisits] = useState<VisitLog[]>([]);
-  const [loading, setLoading] = useState(true);
   const router = useRouter();
 
   useEffect(() => {
     if (!loadingAuth && !user) router.push('/login');
   }, [user, loadingAuth, router]);
 
-  useEffect(() => {
-    async function fetchVisits() {
-      if (user) {
-        const q = query(
-          collection(db, 'visits'),
-          where('userId', '==', user.uid),
-          orderBy('timestamp', 'desc')
-        );
-        const querySnapshot = await getDocs(q);
-        setVisits(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as VisitLog)));
-        setLoading(false);
-      }
-    }
-    if (!loadingAuth && user) {
-      fetchVisits();
-    }
-  }, [user, loadingAuth, db]);
+  const visitsQuery = useMemoFirebase(() => {
+    if (!db || !user) return null;
+    return query(
+      collection(db, 'visits'),
+      where('userId', '==', user.uid),
+      orderBy('timestamp', 'desc')
+    );
+  }, [db, user]);
 
-  if (loadingAuth || loading) {
+  const { data: visits, isLoading: loadingVisits, error } = useCollection<VisitLog>(visitsQuery);
+
+  if (loadingAuth || loadingVisits) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
@@ -57,13 +50,23 @@ export default function HistoryPage() {
            <p className="text-muted-foreground">Comprehensive log of your past library access</p>
         </div>
 
+        {error && (
+          <Alert variant="destructive" className="mb-6 rounded-xl border-destructive/20 bg-destructive/5">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>Database Configuration Required</AlertTitle>
+            <AlertDescription>
+              This view requires a Firestore index. If you are the developer, please check the browser console for a link to create the necessary composite index.
+            </AlertDescription>
+          </Alert>
+        )}
+
         <Card className="shadow-lg border-primary/10">
           <CardHeader className="bg-primary/5">
             <CardTitle className="flex items-center gap-2">
               <Calendar className="h-5 w-5 text-primary" />
               Your Activity Log
             </CardTitle>
-            <CardDescription>Total visits recorded: {visits.length}</CardDescription>
+            <CardDescription>Total visits recorded: {visits?.length || 0}</CardDescription>
           </CardHeader>
           <CardContent className="p-0">
             <Table>
@@ -76,7 +79,7 @@ export default function HistoryPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {visits.length > 0 ? (
+                {visits && visits.length > 0 ? (
                   visits.map((v) => (
                     <TableRow key={v.id}>
                       <TableCell className="font-medium">
@@ -90,7 +93,7 @@ export default function HistoryPage() {
                           {v.purposeOfVisit}
                         </span>
                       </TableCell>
-                      <TableCell className="text-muted-foreground">{v.collegeId}</TableCell>
+                      <TableCell className="text-muted-foreground">{v.collegeName || v.collegeId}</TableCell>
                     </TableRow>
                   ))
                 ) : (

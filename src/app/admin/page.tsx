@@ -3,13 +3,13 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { collection, query, orderBy, getDocs, doc, getDoc, where, Timestamp, writeBatch } from 'firebase/firestore';
-import { useUser, useFirestore } from '@/firebase';
+import { collection, query, orderBy, doc, getDoc, where, Timestamp, writeBatch, getDocs } from 'firebase/firestore';
+import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { Navbar } from '@/components/navbar';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Bar, BarChart, XAxis, YAxis, ResponsiveContainer, Cell, Tooltip } from 'recharts';
-import { Users, History, Settings, Loader2, PieChart, CalendarDays, DatabaseBackup } from 'lucide-react';
+import { Users, History, Settings, Loader2, PieChart, CalendarDays } from 'lucide-react';
 import { format, startOfDay, startOfWeek, startOfMonth } from 'date-fns';
 import { UserProfile, VisitLog } from '@/lib/models';
 import Link from 'next/link';
@@ -23,8 +23,6 @@ export default function AdminDashboard() {
   const { user, isUserLoading: loadingAuth } = useUser();
   const db = useFirestore();
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [allVisits, setAllVisits] = useState<VisitLog[]>([]);
-  const [loading, setLoading] = useState(true);
   const [totalUsers, setTotalUsers] = useState(0);
   const [dateRange, setDateRange] = useState<DateRange>('week');
   const router = useRouter();
@@ -35,9 +33,8 @@ export default function AdminDashboard() {
   }, [user, loadingAuth, router]);
 
   useEffect(() => {
-    async function fetchAdminData() {
-      if (!user) return;
-      
+    async function checkAdminAndSeed() {
+      if (!user || !db) return;
       try {
         const profileSnap = await getDoc(doc(db, 'users', user.uid));
         const profileData = profileSnap.data() as UserProfile;
@@ -58,47 +55,44 @@ export default function AdminDashboard() {
             });
           });
           await batch.commit();
-          toast({ title: "Institutional Directory Initialized", description: "Default colleges have been automatically seeded." });
+          toast({ title: "Institutional Directory Initialized" });
         }
 
         // Fetch User count
         const userSnap = await getDocs(collection(db, 'users'));
         setTotalUsers(userSnap.size);
-
-        // Fetch visits based on date range
-        let q;
-        const now = new Date();
-        let startDate: Date | null = null;
-
-        if (dateRange === 'today') startDate = startOfDay(now);
-        else if (dateRange === 'week') startDate = startOfWeek(now, { weekStartsOn: 1 });
-        else if (dateRange === 'month') startDate = startOfMonth(now);
-
-        if (startDate && dateRange !== 'all') {
-          q = query(
-            collection(db, 'visits'),
-            where('timestamp', '>=', Timestamp.fromDate(startDate)),
-            orderBy('timestamp', 'desc')
-          );
-        } else {
-          q = query(collection(db, 'visits'), orderBy('timestamp', 'desc'));
-        }
-
-        const querySnapshot = await getDocs(q);
-        setAllVisits(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as VisitLog)));
-      } catch (error) {
-        console.error("Error fetching admin data:", error);
-      } finally {
-        setLoading(false);
+      } catch (e) {
+        console.error("Admin init error:", e);
       }
     }
     if (!loadingAuth && user) {
-      fetchAdminData();
+      checkAdminAndSeed();
     }
-  }, [user, loadingAuth, router, db, dateRange, toast]);
+  }, [user, loadingAuth, db, router, toast]);
 
-  // Aggregate visits by College
+  const visitsQuery = useMemoFirebase(() => {
+    if (!db) return null;
+    const now = new Date();
+    let startDate: Date | null = null;
+
+    if (dateRange === 'today') startDate = startOfDay(now);
+    else if (dateRange === 'week') startDate = startOfWeek(now, { weekStartsOn: 1 });
+    else if (dateRange === 'month') startDate = startOfMonth(now);
+
+    if (startDate && dateRange !== 'all') {
+      return query(
+        collection(db, 'visits'),
+        where('timestamp', '>=', Timestamp.fromDate(startDate)),
+        orderBy('timestamp', 'desc')
+      );
+    }
+    return query(collection(db, 'visits'), orderBy('timestamp', 'desc'));
+  }, [db, dateRange]);
+
+  const { data: allVisits, isLoading: loadingVisits } = useCollection<VisitLog>(visitsQuery);
+
   const collegeStats = useMemo(() => {
+    if (!allVisits) return [];
     const counts: Record<string, number> = {};
     allVisits.forEach(v => {
       const collegeName = v.collegeName || v.collegeId || 'Unspecified';
@@ -109,7 +103,7 @@ export default function AdminDashboard() {
       .sort((a, b) => b.total - a.total);
   }, [allVisits]);
 
-  if (loadingAuth || loading || !profile) {
+  if (loadingAuth || !profile || loadingVisits) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
@@ -162,7 +156,7 @@ export default function AdminDashboard() {
           <Card className="bg-primary/5 border-primary/10">
             <CardHeader className="pb-2">
               <CardDescription className="text-primary font-semibold text-xs uppercase">Visits ({dateRange})</CardDescription>
-              <CardTitle className="text-3xl font-bold">{allVisits.length}</CardTitle>
+              <CardTitle className="text-3xl font-bold">{allVisits?.length || 0}</CardTitle>
             </CardHeader>
           </Card>
           <Card className="bg-accent/5 border-accent/10">
@@ -175,9 +169,11 @@ export default function AdminDashboard() {
             <CardHeader className="pb-2">
               <CardDescription className="text-primary font-semibold text-xs uppercase">Avg per Day</CardDescription>
               <CardTitle className="text-3xl font-bold">
-                {dateRange === 'week' ? (allVisits.length / 7).toFixed(1) : 
-                 dateRange === 'month' ? (allVisits.length / 30).toFixed(1) : 
-                 allVisits.length}
+                {allVisits ? (
+                  dateRange === 'week' ? (allVisits.length / 7).toFixed(1) : 
+                  dateRange === 'month' ? (allVisits.length / 30).toFixed(1) : 
+                  allVisits.length
+                ) : 0}
               </CardTitle>
             </CardHeader>
           </Card>
@@ -190,7 +186,6 @@ export default function AdminDashboard() {
         </div>
 
         <div className="grid gap-8 lg:grid-cols-2">
-          {/* Charts */}
           <Card className="shadow-md">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -226,7 +221,6 @@ export default function AdminDashboard() {
             </CardContent>
           </Card>
 
-          {/* Recent Global Logs */}
           <Card className="shadow-md">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -246,7 +240,7 @@ export default function AdminDashboard() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {allVisits.slice(0, 8).map((v) => (
+                  {allVisits?.slice(0, 8).map((v) => (
                     <TableRow key={v.id}>
                       <TableCell className="font-medium">{v.userDisplayName}</TableCell>
                       <TableCell>{v.collegeName || v.collegeId}</TableCell>
@@ -258,7 +252,7 @@ export default function AdminDashboard() {
                       </TableCell>
                     </TableRow>
                   ))}
-                  {allVisits.length === 0 && (
+                  {(!allVisits || allVisits.length === 0) && (
                     <TableRow>
                       <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
                         No visits recorded in this period.
