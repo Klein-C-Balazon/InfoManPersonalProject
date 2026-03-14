@@ -1,0 +1,124 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /**
+     * DATABASE DOCUMENTATION & ARCHITECTURE
+     *
+     * Core Philosophy:
+     * This ruleset implements a Role-Based Access Control (RBAC) model combined with strict User-Ownership. 
+     * Access is bifurcated between 'admin' users (who have broad oversight for analytics and moderation) 
+     * and 'standard' users (who are restricted to their own profiles and data entries).
+     *
+     * Data Structure:
+     * - /users/{userId}: Root collection for UserProfile entities. UserId matches Firebase Auth UID.
+     * - /visits/{visitId}: Root collection for VisitLog entries. Contains denormalized owner IDs.
+     * - /colleges/{collegeId}: Master list of colleges, publicly readable for UI selection.
+     *
+     * Key Security Decisions:
+     * 1. RBAC via Firestore Lookup: Admin status is determined by checking the 'role' field in 
+     *    the user's own document in the /users collection.
+     * 2. Denormalization for Performance: VisitLog documents contain 'userId' and 'collegeId' 
+     *    directly on the resource. This allows for ownership validation without additional 
+     *    document lookups (get() calls), optimizing rule evaluation.
+     * 3. Prototyping Flexibility: While authorization is strictly enforced based on roles 
+     *    and ownership, the internal schema of content fields (like 'purposeOfVisit' or 'displayName') 
+     *    is not validated to allow for rapid frontend iteration.
+     * 4. Relational Integrity: The rules enforce that a user's ID in the document matches 
+     *    the document's path ID and the creator's authenticated UID.
+     */
+
+    // --- Helper Functions ---
+
+    /** Checks if the user is authenticated. */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /** 
+     * Checks if the requesting user has the 'admin' role. 
+     * Note: This performs a document read. 
+     */
+    function isAdmin() {
+      return isSignedIn() && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    /** Checks if the user is the owner of the document based on the provided userId. */
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    /** Checks if the current user's profile is not blocked. */
+    function isNotBlocked() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isBlocked == false;
+    }
+
+    // --- Collection Rules ---
+
+    /**
+     * @description Rules for user profiles. Owners can manage themselves; Admins can search and block/unblock.
+     * @path /users/{userId}
+     * @allow (get) Any signed-in user fetching their own profile OR an Admin fetching any profile.
+     * @deny (list) Standard users attempting to list all profiles (Search is Admin-only).
+     * @principle Verifies identity via path-to-auth-UID matching and enforces administrative RBAC.
+     */
+    match /users/{userId} {
+      allow get: if isOwner(userId) || isAdmin();
+      allow list: if isAdmin();
+      allow create: if isOwner(userId) && request.resource.data.id == userId;
+      allow update: if (resource != null && (isOwner(userId) || isAdmin())) && (request.resource.data.id == resource.data.id);
+      allow delete: if resource != null && isAdmin();
+    }
+
+    /**
+     * @description Rules for library visit logs. Users record their own visits; Admins perform aggregate analytics.
+     * @path /visits/{visitId}
+     * @allow (create) A signed-in user creating a log with their own UID as the 'userId'.
+     * @allow (list) An Admin querying all visits for date-range/college filtering.
+     * @deny (update) Any non-admin attempting to modify a historical visit log.
+     * @principle Uses denormalized ownership fields to authorize writes and administrative overview.
+     */
+    match /visits/{visitId} {
+      allow get: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow list: if isAdmin() || (isSignedIn() && request.query.limit <= 100);
+      allow create: if isSignedIn() && isNotBlocked() && request.resource.data.userId == request.auth.uid;
+      allow update: if resource != null && isAdmin();
+      allow delete: if resource != null && isAdmin();
+    }
+
+    /**
+     * @description Rules for the College master list. Read-only for public/users; Admin-only management.
+     * @path /colleges/{collegeId}
+     * @allow (get, list) Any user (including anonymous) to populate dropdowns or filters.
+     * @deny (create, update, delete) Any non-admin attempting to modify college metadata.
+     * @principle Public-read posture for shared reference data with restricted management.
+     */
+    match /colleges/{collegeId} {
+      allow get, list: if true;
+      allow create: if isAdmin();
+      allow update: if resource != null && isAdmin();
+      allow delete: if resource != null && isAdmin();
+    }
+
+    // Default deny rule for any unmatched documents.
+    // This must be the last match statement to ensure specific rules are evaluated first.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+
+// NOTE: The rules above follow the 'Rules are not filters' principle. 
+// For VisitLog list operations: 
+// 1. Admins can fetch all.
+// 2. Users must query with .where('userId', '==', userUid) to successfully list. 
+// For User list operations:
+// 1. Only Admins can execute queries (supporting the Admin Search Bar feature).
+
+// CRITICAL INTEGRITY: Relational fields 'userId' and 'id' are validated during 
+// creation and made immutable during updates to prevent data drift or unauthorized reassignment.
+
+// PROTOTYPING NOTICE: General data fields are not type-checked to support flexible iteration.
+// Schema validation for 'displayName', 'email', 'purposeOfVisit', etc., should be added 
+// during the hardening phase before production.

@@ -1,0 +1,160 @@
+{
+  "entities": {
+    "UserProfile": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "UserProfile",
+      "type": "object",
+      "description": "Represents a user's profile within the StudyHub Tracker application, storing essential personal and access information.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the UserProfile entity. This typically corresponds to the authentication system's user ID (uid)."
+        },
+        "email": {
+          "type": "string",
+          "description": "The user's email address.",
+          "format": "email"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "The user's chosen display name."
+        },
+        "role": {
+          "type": "string",
+          "description": "The administrative role assigned to the user, either 'admin' for full access or 'user' for standard access."
+        },
+        "collegeId": {
+          "type": "string",
+          "description": "Reference to the College entity the user is affiliated with. (Relationship: College 1:N UserProfile)"
+        },
+        "isBlocked": {
+          "type": "boolean",
+          "description": "A flag indicating whether the user's account is currently blocked, restricting their access to certain app features."
+        }
+      },
+      "required": [
+        "id",
+        "email",
+        "displayName",
+        "role",
+        "collegeId",
+        "isBlocked"
+      ]
+    },
+    "VisitLog": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "VisitLog",
+      "type": "object",
+      "description": "Records an individual library visit event, detailing when and why a user visited the library.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the VisitLog entity."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to the UserProfile entity who made the visit. (Relationship: UserProfile 1:N VisitLog)"
+        },
+        "timestamp": {
+          "type": "string",
+          "description": "The date and time when the library visit occurred.",
+          "format": "date-time"
+        },
+        "purposeOfVisit": {
+          "type": "string",
+          "description": "A brief description of the user's purpose for visiting the library."
+        },
+        "collegeId": {
+          "type": "string",
+          "description": "Reference to the College entity associated with this visit log. This allows for direct filtering and aggregation of visits by college. (Relationship: College 1:N VisitLog)"
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "timestamp",
+        "purposeOfVisit",
+        "collegeId"
+      ]
+    },
+    "College": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "College",
+      "type": "object",
+      "description": "Represents an academic institution from which users originate, used for selection in user profiles and visit logs.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the College entity."
+        },
+        "name": {
+          "type": "string",
+          "description": "The full name of the college."
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/users/{userId}",
+        "definition": {
+          "entityName": "UserProfile",
+          "schema": {
+            "$ref": "#/backend/entities/UserProfile"
+          },
+          "description": "Stores individual user profiles. The `userId` parameter must correspond to the Firebase Authentication UID (`request.auth.uid`). Includes the user's `role` ('admin' or 'user') and `isBlocked` status for administrative moderation. Admins can read and update all user profiles, while regular users can read and update only their own profile.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier of the user, matching their Firebase Authentication UID."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/visits/{visitId}",
+        "definition": {
+          "entityName": "VisitLog",
+          "schema": {
+            "$ref": "#/backend/entities/VisitLog"
+          },
+          "description": "Contains individual library visit log entries. Each document includes denormalized `userId` (for ownership-based security rules and user-specific history queries) and `collegeId` (for efficient filtering and aggregation of visits by college). Admins can read all visit logs, while users can only create their own.",
+          "params": [
+            {
+              "name": "visitId",
+              "description": "The unique identifier for a specific library visit log."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/colleges/{collegeId}",
+        "definition": {
+          "entityName": "College",
+          "schema": {
+            "$ref": "#/backend/entities/College"
+          },
+          "description": "Stores a master list of academic colleges. This collection is intended to be publicly readable to populate dropdown menus in the UI and to link users and visit logs to specific colleges. All documents share a homogeneous public-read security posture.",
+          "params": [
+            {
+              "name": "collegeId",
+              "description": "The unique identifier for a specific college."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore data structure is designed to be secure, scalable, and debuggable, strictly adhering to the core design principles and mandates. It comprises three top-level collections: 'users', 'visits', and 'colleges'. This flat structure simplifies security rules and query patterns.\n\n**Authorization Independence via Denormalization:**\n- For `VisitLog` documents, `userId` and `collegeId` are explicitly denormalized into each log entry. This is critical for authorization independence. When a user creates a visit log, the security rule can directly check `request.auth.uid == request.resource.data.userId` without performing a `get()` call to the parent `UserProfile` document. This ensures atomic creation of visit logs and simplifies rules for user-specific access. Similarly, `collegeId` facilitates direct filtering and aggregation by college without needing to join or query another collection.\n- For `UserProfile` documents, the user's `role` and `isBlocked` status are directly stored on their own document (`/users/{userId}`). Access checks for a user's *own* profile (e.g., `request.auth.uid == resource.data.id`) do not require additional `get()` calls. For administrative access to *other* user profiles or all `VisitLogs`, the security rule will check the `role` field on the *requesting user's own* profile (e.g., `get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'`). While this involves a `get()` call, it's for the requesting user's immutable attributes, not a hierarchical dependency on the `resource` being accessed, making it a standard and accepted practice for global DBAC without custom claims.\n\n**QAPs (Rules are not Filters) Support:**\n- **`/visits` Collection:**\n    - **Admin Analytics:** Admins are granted `list` and `read` access to the entire `/visits` collection. This allows the administrative dashboard to fetch all visits for filtering by date ranges or aggregation by college, satisfying the QAP as the rules explicitly grant full read access to admins.\n    - **User Personal History:** Users are allowed to read `VisitLog` documents where `resource.data.userId == request.auth.uid`. This enables `list` operations with a `where('userId', '==', request.auth.uid)` clause, which the rules will permit, thus respecting the QAP as the query is explicitly secured by the rule.\n- **`/users` Collection:**\n    - **Admin Search/Moderation:** Admins are granted `list` and `read` access to all `UserProfile` documents. This supports the search bar functionality to query users by `displayName` and allows admins to view and modify any user's `isBlocked` status. This satisfies QAP for admin access.\n    - **User Own Profile:** Users can `get` and `update` their own `UserProfile` document (`/users/$(request.auth.uid)`), satisfying QAP.\n- **`/colleges` Collection:** This collection is designed for public `read` access. All documents are available for `list` operations (e.g., for dropdown menus), fully satisfying the QAP as its security posture is homogeneously public-read."
+  }
+}
