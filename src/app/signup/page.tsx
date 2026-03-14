@@ -84,7 +84,12 @@ export default function SignupPage() {
         throw e;
       }
 
-      router.push('/dashboard');
+      // Redirect based on role
+      if (role === 'admin') {
+        router.push('/admin');
+      } else {
+        router.push('/dashboard');
+      }
     } catch (err: any) {
       if (!(err instanceof FirestorePermissionError)) {
         if (err.code === 'auth/email-already-in-use') {

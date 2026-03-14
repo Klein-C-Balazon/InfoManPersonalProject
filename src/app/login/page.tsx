@@ -45,7 +45,13 @@ export default function LoginPage() {
         setLoading(false);
         return;
       }
-      router.push('/dashboard');
+      
+      // Redirect based on role
+      if (userData.role === 'admin') {
+        router.push('/admin');
+      } else {
+        router.push('/dashboard');
+      }
     } else {
       await signOut(auth);
       setError('Profile not found. Please sign up first to register your institutional account.');
@@ -62,7 +68,6 @@ export default function LoginPage() {
       await handleInstitutionalRedirect(result.user);
     } catch (err: any) {
       console.error("Login error code:", err.code);
-      // Modern Firebase often uses 'auth/invalid-credential' for both security and user-not-found
       if (
         err.code === 'auth/user-not-found' || 
         err.code === 'auth/wrong-password' || 
