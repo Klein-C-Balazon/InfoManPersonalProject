@@ -49,7 +49,6 @@ export default function LoginPage() {
           router.push('/dashboard');
         }
       } else {
-        // Fallback for first-time admin creation via Auth
         if (firebaseUser.email === ADMIN_EMAIL) {
           await setDoc(userRef, {
             id: firebaseUser.uid,
@@ -102,13 +101,11 @@ export default function LoginPage() {
         const result = await signInWithEmailAndPassword(auth, ADMIN_EMAIL, adminPassword);
         await handleInstitutionalRedirect(result.user);
       } catch (signInError: any) {
-        // Auto-initialize admin if not found
         if (signInError.code === 'auth/user-not-found' || signInError.code === 'auth/invalid-credential') {
           try {
             const userCredential = await createUserWithEmailAndPassword(auth, ADMIN_EMAIL, adminPassword);
             await handleInstitutionalRedirect(userCredential.user);
           } catch (createError: any) {
-            // If creation fails (e.g. wrong password for existing user), throw the original sign-in error
             throw signInError;
           }
         } else {
@@ -116,8 +113,7 @@ export default function LoginPage() {
         }
       }
     } catch (err: any) {
-      console.error(err);
-      setError('Access Denied: Invalid admin security key. If you have used a different key before, please use that one.');
+      setError('Access Denied: Invalid admin security key. If you have changed the security key previously, please use that one.');
       setLoading(false);
     }
   };
@@ -188,10 +184,10 @@ export default function LoginPage() {
               {error && (
                 <Alert variant="destructive" className="mb-6 rounded-xl border-destructive/20 bg-destructive/5">
                   <AlertCircle className="h-4 w-4" />
-                  <AlertTitle>Login Restriction</AlertTitle>
+                  <AlertTitle>Access Issue</AlertTitle>
                   <AlertDescription className="flex flex-col gap-2">
                     <span>{error}</span>
-                    {!error.includes('Denied') && (
+                    {!error.includes('Denied') && !error.includes('key') && (
                       <Button variant="link" asChild className="p-0 h-auto text-destructive font-bold justify-start">
                         <Link href="/signup">Click here to Sign Up →</Link>
                       </Button>

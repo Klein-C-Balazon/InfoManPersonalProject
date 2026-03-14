@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth, useFirestore } from '@/firebase';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import { doc, getDoc, setDoc, Timestamp } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -35,7 +35,6 @@ export default function AdminLoginPage() {
       } catch (signInError: any) {
         if (signInError.code === 'auth/user-not-found' || signInError.code === 'auth/invalid-credential') {
           try {
-            // Attempt auto-initialization
             const userCredential = await createUserWithEmailAndPassword(auth, ADMIN_EMAIL, password);
             const user = userCredential.user;
             
@@ -62,12 +61,12 @@ export default function AdminLoginPage() {
         if (userSnap.exists() && userSnap.data().role === 'admin') {
           router.push('/admin');
         } else {
-          setError('Access Denied: You do not have administrative privileges.');
+          await signOut(auth);
+          setError('Access Denied: This account exists but does not have administrative privileges.');
           setLoading(false);
         }
       }
     } catch (err: any) {
-      console.error(err);
       setError('Authentication failed. Ensure you are using the correct admin security key. Hint: Admin123');
       setLoading(false);
     }
