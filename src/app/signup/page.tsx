@@ -4,10 +4,9 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { auth } from '@/lib/firebase';
+import { useAuth, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { doc, setDoc, collection, query, orderBy, Timestamp } from 'firebase/firestore';
-import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -29,8 +28,10 @@ export default function SignupPage() {
   const [selectedRole, setSelectedRole] = useState<UserRole>('user');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  
   const router = useRouter();
   const db = useFirestore();
+  const auth = useAuth();
 
   const collegesQuery = useMemoFirebase(() => {
     if (!db) return null;
@@ -39,7 +40,6 @@ export default function SignupPage() {
 
   const { data: dbColleges, isLoading: loadingColleges } = useCollection<College>(collegesQuery);
 
-  // Use DB colleges if available, otherwise fall back to the default institutional list
   const displayColleges = (dbColleges && dbColleges.length > 0) ? dbColleges : DEFAULT_COLLEGES;
 
   const handleSignup = async (e: React.FormEvent) => {
@@ -62,7 +62,6 @@ export default function SignupPage() {
       await updateProfile(user, { displayName: name });
 
       let role: UserRole = selectedRole;
-      // Hardcoded admin override for specific system address
       if (email.toLowerCase() === 'admin@neu.edu.ph') {
         role = 'admin';
       }
@@ -90,7 +89,6 @@ export default function SignupPage() {
         throw e;
       }
 
-      // Redirect based on role
       if (role === 'admin') {
         router.push('/admin');
       } else {

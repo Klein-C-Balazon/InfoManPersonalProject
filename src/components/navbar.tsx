@@ -1,3 +1,4 @@
+
 "use client"
 
 import Link from 'next/link';
@@ -21,10 +22,15 @@ export function Navbar() {
   useEffect(() => {
     async function fetchProfile() {
       if (user) {
-        const docRef = doc(db, 'users', user.uid);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          setProfile(docSnap.data() as UserProfile);
+        try {
+          const docRef = doc(db, 'users', user.uid);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            setProfile(docSnap.data() as UserProfile);
+          }
+        } catch (e) {
+          // Fail silently in navbar to prevent crash
+          console.warn("Navbar: Could not fetch user profile", e);
         }
       } else {
         setProfile(null);

@@ -1,16 +1,17 @@
+
 "use client"
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { auth, db, googleProvider } from '@/lib/firebase';
-import { signInWithPopup, signOut, signInWithEmailAndPassword } from 'firebase/auth';
+import { useAuth, useFirestore, useUser } from '@/firebase';
+import { signInWithPopup, signOut, signInWithEmailAndPassword, GoogleAuthProvider } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
-import { BookOpen, AlertCircle, GraduationCap, Mail, Lock } from 'lucide-react';
+import { BookOpen, AlertCircle, GraduationCap, Mail, Lock, Loader2 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
@@ -22,39 +23,41 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  
+  const auth = useAuth();
+  const db = useFirestore();
+  const { user, isUserLoading } = useUser();
 
-  const handleInstitutionalRedirect = async (user: any) => {
-    const userRef = doc(db, 'users', user.uid);
-    let userSnap;
+  const handleInstitutionalRedirect = async (firebaseUser: any) => {
+    const userRef = doc(db, 'users', firebaseUser.uid);
     try {
-      userSnap = await getDoc(userRef);
+      const userSnap = await getDoc(userRef);
+      if (userSnap.exists()) {
+        const userData = userSnap.data();
+        if (userData.isBlocked) {
+          await signOut(auth);
+          setError('Your account has been blocked. Please contact the administrator.');
+          setLoading(false);
+          return;
+        }
+        
+        if (userData.role === 'admin') {
+          router.push('/admin');
+        } else {
+          router.push('/dashboard');
+        }
+      } else {
+        await signOut(auth);
+        setError('Profile not found. Please sign up first to register your institutional account.');
+        setLoading(false);
+      }
     } catch (e: any) {
       const permissionError = new FirestorePermissionError({
         path: userRef.path,
         operation: 'get',
       });
       errorEmitter.emit('permission-error', permissionError);
-      throw e;
-    }
-
-    if (userSnap.exists()) {
-      const userData = userSnap.data();
-      if (userData.isBlocked) {
-        await signOut(auth);
-        setError('Your account has been blocked. Please contact the administrator.');
-        setLoading(false);
-        return;
-      }
-      
-      // Redirect based on role
-      if (userData.role === 'admin') {
-        router.push('/admin');
-      } else {
-        router.push('/dashboard');
-      }
-    } else {
-      await signOut(auth);
-      setError('Profile not found. Please sign up first to register your institutional account.');
+      setError('A security restriction prevented your profile access.');
       setLoading(false);
     }
   };
@@ -67,7 +70,6 @@ export default function LoginPage() {
       const result = await signInWithEmailAndPassword(auth, email, password);
       await handleInstitutionalRedirect(result.user);
     } catch (err: any) {
-      console.error("Login error code:", err.code);
       if (
         err.code === 'auth/user-not-found' || 
         err.code === 'auth/wrong-password' || 
@@ -84,6 +86,7 @@ export default function LoginPage() {
   const handleGoogleLogin = async () => {
     setLoading(true);
     setError('');
+    const googleProvider = new GoogleAuthProvider();
     try {
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
@@ -97,12 +100,18 @@ export default function LoginPage() {
 
       await handleInstitutionalRedirect(user);
     } catch (err: any) {
-      if (!(err instanceof FirestorePermissionError)) {
-        setError(err.message || 'Institutional login failed.');
-      }
+      setError(err.message || 'Institutional login failed.');
       setLoading(false);
     }
   };
+
+  if (isUserLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4 md:p-6">
@@ -176,7 +185,12 @@ export default function LoginPage() {
                 className="w-full h-12 font-semibold rounded-xl" 
                 disabled={loading}
               >
-                {loading ? 'Authenticating...' : 'Sign In'}
+                {loading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Authenticating...
+                  </>
+                ) : 'Sign In'}
               </Button>
             </form>
             
