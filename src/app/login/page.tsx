@@ -1,10 +1,11 @@
+
 "use client"
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth, useFirestore, useUser } from '@/firebase';
-import { signInWithRedirect, getRedirectResult, GoogleAuthProvider, signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { signInWithRedirect, getRedirectResult, GoogleAuthProvider, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import { doc, getDoc, setDoc, Timestamp } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -15,7 +16,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 
-const ADMIN_EMAIL = 'administrator@neu.edu.ph';
+const ADMIN_EMAIL = 'admin@neu.edu.ph';
+const ADMIN_KEY = 'Admin123';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -42,7 +44,9 @@ export default function LoginPage() {
           await handleInstitutionalRedirect(result.user);
         }
       } catch (err: any) {
-        // Handle redirect errors silently
+        if (err.code === 'auth/popup-closed-by-user') {
+          setError('Login cancelled. Please try again or check your browser settings.');
+        }
       }
     };
     checkRedirect();
@@ -65,7 +69,7 @@ export default function LoginPage() {
           await setDoc(userRef, {
             id: firebaseUser.uid,
             email: ADMIN_EMAIL,
-            displayName: 'Admin',
+            displayName: 'System Admin',
             role: 'admin',
             collegeId: 'admin',
             isBlocked: false,
@@ -108,16 +112,44 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     setError('');
+
+    if (adminPassword !== ADMIN_KEY) {
+      setError('Access Denied: Invalid admin security key.');
+      setLoading(false);
+      return;
+    }
     
     try {
-      const result = await signInWithEmailAndPassword(auth, ADMIN_EMAIL, adminPassword);
-      await handleInstitutionalRedirect(result.user);
-    } catch (err: any) {
-      if (err.code === 'auth/user-not-found' && adminPassword === 'Admin123') {
-        setError('Admin account requires manual initialization.');
-      } else {
-        setError('Access Denied: Invalid admin security key.');
+      try {
+        const result = await signInWithEmailAndPassword(auth, ADMIN_EMAIL, adminPassword);
+        await handleInstitutionalRedirect(result.user);
+      } catch (signInError: any) {
+        // Auto-initialize admin if not found or credentials updated
+        if (signInError.code === 'auth/user-not-found' || signInError.code === 'auth/invalid-credential') {
+          try {
+            const result = await createUserWithEmailAndPassword(auth, ADMIN_EMAIL, adminPassword);
+            const user = result.user;
+            await setDoc(doc(db, 'users', user.uid), {
+              id: user.uid,
+              email: ADMIN_EMAIL,
+              displayName: 'System Admin',
+              role: 'admin',
+              collegeId: 'admin',
+              isBlocked: false,
+              createdAt: Timestamp.now(),
+            });
+            router.push('/admin');
+          } catch (createError: any) {
+            setError('Access Denied: Invalid admin security key.');
+            setLoading(false);
+          }
+        } else {
+          setError('Access Denied: Invalid admin security key.');
+          setLoading(false);
+        }
       }
+    } catch (err: any) {
+      setError('Access Denied: Security protocol error.');
       setLoading(false);
     }
   };
@@ -181,7 +213,6 @@ export default function LoginPage() {
               <TabsContent value="user" className="space-y-6">
                 <form onSubmit={handleStudentLogin} className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="email">Institutional Email</Label>
                     <div className="relative">
                       <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
                       <Input 
@@ -196,7 +227,6 @@ export default function LoginPage() {
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="password">Password</Label>
                     <div className="relative">
                       <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
                       <Input 

@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth, useFirestore } from '@/firebase';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, getDoc, setDoc, Timestamp } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -14,6 +14,7 @@ import { ShieldAlert, Lock, Loader2, ArrowLeft, BookOpen } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 const ADMIN_EMAIL = 'admin@neu.edu.ph';
+const ADMIN_KEY = 'Admin123';
 
 export default function AdminLoginPage() {
   const [password, setPassword] = useState('');
@@ -28,38 +29,57 @@ export default function AdminLoginPage() {
     e.preventDefault();
     setLoading(true);
     setError('');
+
+    if (password !== ADMIN_KEY) {
+      setError('Access Denied: Invalid admin security key.');
+      setLoading(false);
+      return;
+    }
     
     try {
-      const result = await signInWithEmailAndPassword(auth, ADMIN_EMAIL, password);
-      const user = result.user;
+      try {
+        const result = await signInWithEmailAndPassword(auth, ADMIN_EMAIL, password);
+        const user = result.user;
 
-      if (user) {
-        const userRef = doc(db, 'users', user.uid);
-        const userSnap = await getDoc(userRef);
-        
-        if (userSnap.exists()) {
-          if (userSnap.data().role === 'admin') {
+        if (user) {
+          const userRef = doc(db, 'users', user.uid);
+          const userSnap = await getDoc(userRef);
+          
+          if (userSnap.exists() && userSnap.data().role === 'admin') {
             router.push('/admin');
           } else {
-            setError('Access Denied: Administrative privileges required.');
-            setLoading(false);
+            // Fix role if exists but not admin
+            await setDoc(userRef, { role: 'admin' }, { merge: true });
+            router.push('/admin');
+          }
+        }
+      } catch (signInError: any) {
+        // If user doesn't exist, create it (auto-initialization)
+        if (signInError.code === 'auth/user-not-found' || signInError.code === 'auth/invalid-credential') {
+          try {
+            const result = await createUserWithEmailAndPassword(auth, ADMIN_EMAIL, password);
+            const user = result.user;
+            await setDoc(doc(db, 'users', user.uid), {
+              id: user.uid,
+              email: ADMIN_EMAIL,
+              displayName: 'System Admin',
+              role: 'admin',
+              collegeId: 'admin',
+              isBlocked: false,
+              createdAt: Timestamp.now(),
+            });
+            router.push('/admin');
+          } catch (createError: any) {
+             setError('Security Check Failed: System could not initialize administrative profile.');
+             setLoading(false);
           }
         } else {
-          // Initialize admin profile if missing
-          await setDoc(userRef, {
-            id: user.uid,
-            email: ADMIN_EMAIL,
-            displayName: 'Admin',
-            role: 'admin',
-            collegeId: 'admin',
-            isBlocked: false,
-            createdAt: Timestamp.now(),
-          });
-          router.push('/admin');
+          setError('Access Denied: Invalid admin security key.');
+          setLoading(false);
         }
       }
     } catch (err: any) {
-      setError('Access Denied: Invalid admin security key.');
+      setError('Access Denied: Security restriction encountered.');
       setLoading(false);
     }
   };
