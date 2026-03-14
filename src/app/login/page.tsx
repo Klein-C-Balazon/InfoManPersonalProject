@@ -1,11 +1,11 @@
 
 "use client"
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth, useFirestore, useUser } from '@/firebase';
-import { signInWithRedirect, getRedirectResult, signOut, signInWithEmailAndPassword, GoogleAuthProvider } from 'firebase/auth';
+import { signInWithPopup, signOut, signInWithEmailAndPassword, GoogleAuthProvider } from 'firebase/auth';
 import { doc, getDoc, setDoc, Timestamp } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -25,30 +25,6 @@ export default function LoginPage() {
   const auth = useAuth();
   const db = useFirestore();
   const { isUserLoading } = useUser();
-
-  // Handle the result of the Google Redirect
-  useEffect(() => {
-    const handleRedirectResult = async () => {
-      try {
-        const result = await getRedirectResult(auth);
-        if (result) {
-          setLoading(true);
-          const user = result.user;
-          if (!user.email?.endsWith('@neu.edu.ph')) {
-            await signOut(auth);
-            setError('Access restricted. Only @neu.edu.ph institutional emails are allowed.');
-            setLoading(false);
-            return;
-          }
-          await handleInstitutionalRedirect(user);
-        }
-      } catch (err: any) {
-        setError(err.message || 'Institutional login failed.');
-        setLoading(false);
-      }
-    };
-    handleRedirectResult();
-  }, [auth]);
 
   const handleInstitutionalRedirect = async (firebaseUser: any) => {
     const userRef = doc(db, 'users', firebaseUser.uid);
@@ -116,11 +92,26 @@ export default function LoginPage() {
     setLoading(true);
     setError('');
     const googleProvider = new GoogleAuthProvider();
+    googleProvider.setCustomParameters({ prompt: 'select_account' });
+    
     try {
-      // Use Redirect instead of Popup for better compatibility with Cloud Workstations
-      await signInWithRedirect(auth, googleProvider);
+      const result = await signInWithPopup(auth, googleProvider);
+      const user = result.user;
+      
+      if (!user.email?.endsWith('@neu.edu.ph')) {
+        await signOut(auth);
+        setError('Access restricted. Only @neu.edu.ph institutional emails are allowed.');
+        setLoading(false);
+        return;
+      }
+      
+      await handleInstitutionalRedirect(user);
     } catch (err: any) {
-      setError('Institutional login failed. Please try again.');
+      if (err.code === 'auth/popup-closed-by-user') {
+        setError('Login cancelled. Please try again or check your browser settings.');
+      } else {
+        setError('Institutional login failed. Please try again.');
+      }
       setLoading(false);
     }
   };
@@ -198,9 +189,6 @@ export default function LoginPage() {
               </TabsContent>
 
               <TabsContent value="admin" className="space-y-6 text-center">
-                <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 text-slate-800 text-sm mb-4">
-                  Enter administrative security key.
-                </div>
                 <form onSubmit={handleAdminLogin} className="space-y-6">
                   <div className="space-y-2 text-left">
                     <Label htmlFor="adminPassword">Security Key</Label>
