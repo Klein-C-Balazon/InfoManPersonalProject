@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useEffect } from 'react';
@@ -13,6 +14,7 @@ import { CheckCircle2, Loader2, Library, GraduationCap, ClipboardCheck, ArrowRig
 import { College, UserProfile } from '@/lib/models';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { DEFAULT_COLLEGES } from '@/lib/constants';
 
 export default function DashboardPage() {
   const { user, isUserLoading: loadingAuth } = useUser();
@@ -31,7 +33,10 @@ export default function DashboardPage() {
     return query(collection(db, 'colleges'), orderBy('name', 'asc'));
   }, [db]);
 
-  const { data: colleges, isLoading: loadingColleges } = useCollection<College>(collegesQuery);
+  const { data: dbColleges, isLoading: loadingColleges } = useCollection<College>(collegesQuery);
+
+  // Fallback to defaults if DB is empty
+  const displayColleges = (dbColleges && dbColleges.length > 0) ? dbColleges : DEFAULT_COLLEGES;
 
   useEffect(() => {
     if (!loadingAuth && !user) {
@@ -50,7 +55,7 @@ export default function DashboardPage() {
             return;
           }
           setProfile(profileData);
-          if (profileData.collegeId && profileData.collegeId !== 'Not set') {
+          if (profileData.collegeId) {
             setSelectedCollegeId(profileData.collegeId);
           }
         }
@@ -66,7 +71,7 @@ export default function DashboardPage() {
     if (!purpose || !selectedCollegeId || !user) return;
     setSubmitting(true);
 
-    const collegeObj = colleges?.find(c => c.id === selectedCollegeId);
+    const collegeObj = displayColleges.find(c => c.id === selectedCollegeId);
     const collegeName = collegeObj?.name || selectedCollegeId;
 
     try {
@@ -148,16 +153,6 @@ export default function DashboardPage() {
             <p className="text-slate-500">Please provide your visit details below</p>
           </div>
 
-          {!loadingColleges && (!colleges || colleges.length === 0) && (
-            <Alert className="bg-amber-50 border-amber-200 text-amber-800">
-              <AlertCircle className="h-4 w-4" />
-              <AlertTitle>No Colleges Registered</AlertTitle>
-              <AlertDescription>
-                The institutional directory is currently empty. Please contact an administrator to register your college.
-              </AlertDescription>
-            </Alert>
-          )}
-
           <Card className="shadow-xl border-none rounded-3xl overflow-hidden">
             <CardHeader className="bg-white border-b border-slate-100 p-8">
               <div className="flex items-center gap-4">
@@ -203,7 +198,7 @@ export default function DashboardPage() {
                         <SelectValue placeholder={loadingColleges ? "Loading colleges..." : "Select your college"} />
                       </SelectTrigger>
                       <SelectContent className="rounded-xl">
-                        {colleges?.map((col) => (
+                        {displayColleges.map((col) => (
                           <SelectItem key={col.id} value={col.id}>
                             {col.name}
                           </SelectItem>

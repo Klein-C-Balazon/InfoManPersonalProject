@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState } from 'react';
@@ -18,6 +19,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { College, UserRole } from '@/lib/models';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
+import { DEFAULT_COLLEGES } from '@/lib/constants';
 
 export default function SignupPage() {
   const [email, setEmail] = useState('admin@neu.edu.ph');
@@ -35,11 +37,14 @@ export default function SignupPage() {
     return query(collection(db, 'colleges'), orderBy('name', 'asc'));
   }, [db]);
 
-  const { data: colleges, isLoading: loadingColleges } = useCollection<College>(collegesQuery);
+  const { data: dbColleges, isLoading: loadingColleges } = useCollection<College>(collegesQuery);
+
+  // Use DB colleges if available, otherwise fall back to the default institutional list
+  const displayColleges = (dbColleges && dbColleges.length > 0) ? dbColleges : DEFAULT_COLLEGES;
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!collegeId && colleges && colleges.length > 0) {
+    if (!collegeId) {
       setError('Please select your college affiliation.');
       return;
     }
@@ -66,7 +71,7 @@ export default function SignupPage() {
         email: user.email,
         displayName: name,
         role: role,
-        collegeId: collegeId || 'Institutional Admin',
+        collegeId: collegeId,
         isBlocked: false,
         createdAt: Timestamp.now(),
       };
@@ -188,17 +193,14 @@ export default function SignupPage() {
                 <Label htmlFor="college">Institutional Affiliation</Label>
                 <Select onValueChange={setCollegeId} value={collegeId}>
                   <SelectTrigger className="rounded-xl h-11">
-                    <SelectValue placeholder={loadingColleges ? "Loading colleges..." : (colleges?.length ? "Select your college" : "Institutional Admin")} />
+                    <SelectValue placeholder={loadingColleges ? "Loading colleges..." : "Select your college"} />
                   </SelectTrigger>
                   <SelectContent className="rounded-xl">
-                    {colleges?.map((col) => (
+                    {displayColleges.map((col) => (
                       <SelectItem key={col.id} value={col.id}>
                         {col.name}
                       </SelectItem>
                     ))}
-                    {(!colleges || colleges.length === 0) && (
-                       <SelectItem value="Institutional Admin">Institutional Admin</SelectItem>
-                    )}
                   </SelectContent>
                 </Select>
               </div>

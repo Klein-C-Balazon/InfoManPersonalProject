@@ -1,18 +1,21 @@
+
 "use client"
 
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { collection, query, orderBy, getDocs, doc, getDoc, where, Timestamp } from 'firebase/firestore';
+import { collection, query, orderBy, getDocs, doc, getDoc, where, Timestamp, writeBatch } from 'firebase/firestore';
 import { useUser, useFirestore } from '@/firebase';
 import { Navbar } from '@/components/navbar';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Bar, BarChart, XAxis, YAxis, ResponsiveContainer, Cell, Tooltip } from 'recharts';
-import { Users, History, Settings, Loader2, PieChart, CalendarDays } from 'lucide-react';
+import { Users, History, Settings, Loader2, PieChart, CalendarDays, DatabaseBackup } from 'lucide-react';
 import { format, startOfDay, startOfWeek, startOfMonth } from 'date-fns';
 import { UserProfile, VisitLog } from '@/lib/models';
 import Link from 'next/link';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DEFAULT_COLLEGES } from '@/lib/constants';
+import { useToast } from '@/hooks/use-toast';
 
 type DateRange = 'today' | 'week' | 'month' | 'all';
 
@@ -25,6 +28,7 @@ export default function AdminDashboard() {
   const [totalUsers, setTotalUsers] = useState(0);
   const [dateRange, setDateRange] = useState<DateRange>('week');
   const router = useRouter();
+  const { toast } = useToast();
 
   useEffect(() => {
     if (!loadingAuth && !user) router.push('/login');
@@ -42,6 +46,20 @@ export default function AdminDashboard() {
           return;
         }
         setProfile(profileData);
+
+        // Auto-seed colleges if collection is empty
+        const collegesSnap = await getDocs(collection(db, 'colleges'));
+        if (collegesSnap.empty) {
+          const batch = writeBatch(db);
+          DEFAULT_COLLEGES.forEach(col => {
+            batch.set(doc(db, 'colleges', col.id), {
+              name: col.name,
+              addedAt: Timestamp.now()
+            });
+          });
+          await batch.commit();
+          toast({ title: "Institutional Directory Initialized", description: "Default colleges have been automatically seeded." });
+        }
 
         // Fetch User count
         const userSnap = await getDocs(collection(db, 'users'));
@@ -77,13 +95,13 @@ export default function AdminDashboard() {
     if (!loadingAuth && user) {
       fetchAdminData();
     }
-  }, [user, loadingAuth, router, db, dateRange]);
+  }, [user, loadingAuth, router, db, dateRange, toast]);
 
   // Aggregate visits by College
   const collegeStats = useMemo(() => {
     const counts: Record<string, number> = {};
     allVisits.forEach(v => {
-      const collegeName = v.collegeId || 'Unspecified';
+      const collegeName = v.collegeName || v.collegeId || 'Unspecified';
       counts[collegeName] = (counts[collegeName] || 0) + 1;
     });
     return Object.entries(counts)
@@ -231,7 +249,7 @@ export default function AdminDashboard() {
                   {allVisits.slice(0, 8).map((v) => (
                     <TableRow key={v.id}>
                       <TableCell className="font-medium">{v.userDisplayName}</TableCell>
-                      <TableCell>{v.collegeId}</TableCell>
+                      <TableCell>{v.collegeName || v.collegeId}</TableCell>
                       <TableCell>
                         <span className="text-xs bg-muted px-2 py-1 rounded-full">{v.purposeOfVisit}</span>
                       </TableCell>
