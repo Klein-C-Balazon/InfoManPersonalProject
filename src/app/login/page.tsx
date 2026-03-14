@@ -8,7 +8,7 @@ import { signInWithRedirect, getRedirectResult, GoogleAuthProvider, signInWithEm
 import { doc, getDoc, setDoc, Timestamp } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
 import { BookOpen, AlertCircle, Loader2, Lock, User, Mail, GraduationCap } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -56,12 +56,11 @@ export default function LoginPage() {
         const userData = userSnap.data();
         if (userData.isBlocked) {
           await signOut(auth);
-          setError('Your account has been blocked. Please contact the administrator.');
+          setError('Your account has been blocked.');
           return;
         }
         router.push(userData.role === 'admin' ? '/admin' : '/dashboard');
       } else {
-        // Auto-initialize admin if it's the admin identity
         if (firebaseUser.email === ADMIN_EMAIL) {
           await setDoc(userRef, {
             id: firebaseUser.uid,
@@ -83,7 +82,7 @@ export default function LoginPage() {
         router.push(`/signup?${params.toString()}`);
       }
     } catch (e: any) {
-      setError('A security restriction prevented your profile access.');
+      setError('A security restriction prevented access.');
     }
   };
 
@@ -114,16 +113,8 @@ export default function LoginPage() {
       const result = await signInWithEmailAndPassword(auth, ADMIN_EMAIL, adminPassword);
       await handleInstitutionalRedirect(result.user);
     } catch (err: any) {
-      // Auto-initialize admin on first login attempt if it fails due to account not existing
       if (err.code === 'auth/user-not-found' && adminPassword === 'Admin123') {
-        try {
-          // This would typically involve creating the user first, but for MVP we assume 
-          // the user manages Auth accounts or uses Google. 
-          // For a seamless "Admin123" experience, we'd need createUserWithEmailAndPassword.
-          setError('Admin account requires manual initialization or previous registration.');
-        } catch (initErr) {
-          setError('Access Denied: Administrative initialization failed.');
-        }
+        setError('Admin account requires manual initialization.');
       } else {
         setError('Access Denied: Invalid admin security key.');
       }
@@ -159,13 +150,12 @@ export default function LoginPage() {
           <h1 className="font-headline font-bold text-4xl tracking-tight">
             StudyHub <span className="text-[#3b82f6]">Tracker</span>
           </h1>
-          <p className="text-slate-400 font-medium">NEU Library Visitor Portal</p>
+          <p className="text-slate-400 font-medium uppercase tracking-wider text-xs">NEU Library Portal</p>
         </div>
 
         <Card className="shadow-xl border-none overflow-hidden rounded-[2rem]">
           <CardHeader className="bg-white pb-6 pt-10 text-center">
             <CardTitle className="text-2xl font-bold">Access Portal</CardTitle>
-            <CardDescription className="text-slate-400">Select your access mode</CardDescription>
           </CardHeader>
           <CardContent className="px-8">
             <Tabs defaultValue="user" className="w-full">
@@ -197,7 +187,7 @@ export default function LoginPage() {
                       <Input 
                         id="email" 
                         type="email" 
-                        placeholder="klein.balazon@neu.edu.ph" 
+                        placeholder="name@neu.edu.ph" 
                         className="pl-10 h-14 rounded-xl bg-slate-50 border-slate-200"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
@@ -234,7 +224,7 @@ export default function LoginPage() {
                     <Separator className="w-full" />
                   </div>
                   <div className="relative flex justify-center text-xs uppercase">
-                    <span className="bg-white px-2 text-slate-400 font-bold">OR CONTINUE WITH</span>
+                    <span className="bg-white px-2 text-slate-400 font-bold tracking-widest">OR</span>
                   </div>
                 </div>
 
@@ -279,9 +269,9 @@ export default function LoginPage() {
               </TabsContent>
             </Tabs>
           </CardContent>
-          <CardFooter className="flex flex-col gap-3 justify-center pb-10 pt-6">
+          <CardFooter className="flex flex-col gap-3 justify-center pb-10 pt-6 text-center">
             <p className="text-sm text-slate-400">
-              New to the library? <Link href="/signup" className="text-[#2b5a9e] font-bold hover:underline">Create a student profile</Link>
+              New to the library? <Link href="/signup" className="text-[#2b5a9e] font-bold hover:underline">Register Profile</Link>
             </p>
           </CardFooter>
         </Card>
