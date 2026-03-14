@@ -6,20 +6,24 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth, useFirestore, useUser } from '@/firebase';
 import { signInWithPopup, signOut, signInWithEmailAndPassword, GoogleAuthProvider } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, Timestamp } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
-import { BookOpen, AlertCircle, GraduationCap, Mail, Lock, Loader2, ShieldCheck } from 'lucide-react';
+import { BookOpen, AlertCircle, GraduationCap, Mail, Lock, Loader2, ShieldCheck, User } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { Separator } from '@/components/ui/separator';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
+const ADMIN_EMAIL = 'admin@neu.edu.ph';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -47,6 +51,21 @@ export default function LoginPage() {
           router.push('/dashboard');
         }
       } else {
+        // For admin@neu.edu.ph, if the profile doesn't exist but they logged in, create it (prototype helper)
+        if (firebaseUser.email === ADMIN_EMAIL) {
+          await setDoc(userRef, {
+            id: firebaseUser.uid,
+            email: ADMIN_EMAIL,
+            displayName: 'Library Admin',
+            role: 'admin',
+            collegeId: 'administration',
+            isBlocked: false,
+            createdAt: Timestamp.now(),
+          });
+          router.push('/admin');
+          return;
+        }
+
         await signOut(auth);
         setError('Profile not found. Please sign up first to register your institutional account.');
         setLoading(false);
@@ -70,15 +89,21 @@ export default function LoginPage() {
       const result = await signInWithEmailAndPassword(auth, email, password);
       await handleInstitutionalRedirect(result.user);
     } catch (err: any) {
-      if (
-        err.code === 'auth/user-not-found' || 
-        err.code === 'auth/wrong-password' || 
-        err.code === 'auth/invalid-credential'
-      ) {
-        setError('Account not found or password incorrect. Please sign up first if you are new.');
-      } else {
-        setError('Login failed. Ensure you have registered your account.');
-      }
+      setError('Account not found or password incorrect. Please sign up first if you are new.');
+      setLoading(false);
+    }
+  };
+
+  const handleAdminLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    try {
+      // Use the hardcoded admin email and the provided admin password
+      const result = await signInWithEmailAndPassword(auth, ADMIN_EMAIL, adminPassword);
+      await handleInstitutionalRedirect(result.user);
+    } catch (err: any) {
+      setError('Access Denied: Invalid administrator security key.');
       setLoading(false);
     }
   };
@@ -131,99 +156,144 @@ export default function LoginPage() {
         <Card className="shadow-2xl border-primary/5 overflow-hidden rounded-3xl">
           <CardHeader className="bg-primary/5 pb-8 pt-10 text-center">
             <CardTitle className="text-2xl">Access Portal</CardTitle>
-            <CardDescription>Student & Faculty Login</CardDescription>
+            <CardDescription>Select your access mode</CardDescription>
           </CardHeader>
-          <CardContent className="pt-8 px-8 space-y-6">
-            {error && (
-              <Alert variant="destructive" className="rounded-xl border-destructive/20 bg-destructive/5">
-                <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Login Restriction</AlertTitle>
-                <AlertDescription className="flex flex-col gap-2">
-                  <span>{error}</span>
-                  {error.includes('sign up') && (
-                    <Button variant="link" asChild className="p-0 h-auto text-destructive font-bold justify-start">
-                      <Link href="/signup">Click here to Sign Up →</Link>
-                    </Button>
-                  )}
-                </AlertDescription>
-              </Alert>
-            )}
+          <CardContent className="pt-4 px-8 space-y-6">
+            <Tabs defaultValue="user" className="w-full">
+              <TabsList className="grid w-full grid-cols-2 mb-8 h-12 rounded-xl">
+                <TabsTrigger value="user" className="rounded-lg flex items-center gap-2">
+                  <User className="h-4 w-4" />
+                  Student/Faculty
+                </TabsTrigger>
+                <TabsTrigger value="admin" className="rounded-lg flex items-center gap-2">
+                  <ShieldCheck className="h-4 w-4" />
+                  Library Staff
+                </TabsTrigger>
+              </TabsList>
 
-            <form onSubmit={handleEmailLogin} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">Institutional Email</Label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                  <Input 
-                    id="email" 
-                    type="email" 
-                    placeholder="name@neu.edu.ph" 
-                    className="pl-10 h-12 rounded-xl"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required 
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                  <Input 
-                    id="password" 
-                    type="password" 
-                    placeholder="••••••••" 
-                    className="pl-10 h-12 rounded-xl"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required 
-                  />
-                </div>
-              </div>
-              <Button 
-                type="submit" 
-                className="w-full h-12 font-semibold rounded-xl" 
-                disabled={loading}
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Authenticating...
-                  </>
-                ) : 'Sign In'}
-              </Button>
-            </form>
-            
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <Separator className="w-full" />
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-background px-2 text-muted-foreground">Or continue with</span>
-              </div>
-            </div>
+              {error && (
+                <Alert variant="destructive" className="mb-6 rounded-xl border-destructive/20 bg-destructive/5">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>Login Restriction</AlertTitle>
+                  <AlertDescription className="flex flex-col gap-2">
+                    <span>{error}</span>
+                    {!error.includes('Denied') && (
+                      <Button variant="link" asChild className="p-0 h-auto text-destructive font-bold justify-start">
+                        <Link href="/signup">Click here to Sign Up →</Link>
+                      </Button>
+                    )}
+                  </AlertDescription>
+                </Alert>
+              )}
 
-            <Button 
-              type="button" 
-              variant="outline"
-              size="lg"
-              className="w-full h-14 text-md font-semibold rounded-xl flex items-center justify-center gap-3 transition-all hover:bg-secondary/50" 
-              onClick={handleGoogleLogin}
-              disabled={loading}
-            >
-              <GraduationCap className="h-5 w-5" />
-              Sign in with Google Account
-            </Button>
+              <TabsContent value="user" className="space-y-6">
+                <form onSubmit={handleEmailLogin} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Institutional Email</Label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                      <input 
+                        id="email" 
+                        type="email" 
+                        placeholder="name@neu.edu.ph" 
+                        className="flex h-12 w-full rounded-xl border border-input bg-background px-10 py-2 text-base ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        required 
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="password">Password</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                      <input 
+                        id="password" 
+                        type="password" 
+                        placeholder="••••••••" 
+                        className="flex h-12 w-full rounded-xl border border-input bg-background px-10 py-2 text-base ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required 
+                      />
+                    </div>
+                  </div>
+                  <Button 
+                    type="submit" 
+                    className="w-full h-12 font-semibold rounded-xl" 
+                    disabled={loading}
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Authenticating...
+                      </>
+                    ) : 'Sign In'}
+                  </Button>
+                </form>
+                
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <Separator className="w-full" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-background px-2 text-muted-foreground">Or continue with</span>
+                  </div>
+                </div>
+
+                <Button 
+                  type="button" 
+                  variant="outline"
+                  size="lg"
+                  className="w-full h-14 text-md font-semibold rounded-xl flex items-center justify-center gap-3 transition-all hover:bg-secondary/50" 
+                  onClick={handleGoogleLogin}
+                  disabled={loading}
+                >
+                  <GraduationCap className="h-5 w-5" />
+                  Sign in with Google Account
+                </Button>
+              </TabsContent>
+
+              <TabsContent value="admin" className="space-y-6">
+                <form onSubmit={handleAdminLogin} className="space-y-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="adminPassword">Administrator Security Key</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                      <input 
+                        id="adminPassword" 
+                        type="password" 
+                        placeholder="Enter 123123 to access" 
+                        className="flex h-12 w-full rounded-xl border border-input bg-background px-10 py-2 text-base ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
+                        value={adminPassword}
+                        onChange={(e) => setAdminPassword(e.target.value)}
+                        required 
+                      />
+                    </div>
+                  </div>
+                  <Button 
+                    type="submit" 
+                    className="w-full h-12 font-bold rounded-xl bg-slate-900 hover:bg-slate-800 text-white" 
+                    disabled={loading}
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Verifying...
+                      </>
+                    ) : 'Unlock Admin Dashboard'}
+                  </Button>
+                  <p className="text-center text-xs text-muted-foreground">
+                    Restricted area for library staff only.
+                  </p>
+                </form>
+              </TabsContent>
+            </Tabs>
           </CardContent>
           <CardFooter className="bg-secondary/20 flex flex-col gap-3 py-6 text-center">
             <p className="text-sm text-muted-foreground">
-              New here? <Link href="/signup" className="text-primary font-bold hover:underline">Create an account</Link>
+              New to the library? <Link href="/signup" className="text-primary font-bold hover:underline">Create a student profile</Link>
             </p>
-            <Separator className="w-1/2 mx-auto" />
-            <Link href="/admin/login" className="flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors">
-              <ShieldCheck className="h-4 w-4" />
-              Library Administrator Access
-            </Link>
           </CardFooter>
         </Card>
       </div>
