@@ -27,13 +27,17 @@ export default function AdminUsersPage() {
   useEffect(() => {
     async function fetchInitialUsers() {
       if (user) {
-        // Auth check
-        const profileSnap = await getDoc(doc(db, 'users', user.uid));
-        if (profileSnap.data()?.role !== 'admin') {
-          router.push('/dashboard');
-          return;
+        try {
+          // Auth check
+          const profileSnap = await getDoc(doc(db, 'users', user.uid));
+          if (profileSnap.data()?.role !== 'admin') {
+            router.push('/dashboard');
+            return;
+          }
+          await performSearch('');
+        } catch (e) {
+          console.error("Auth check failed", e);
         }
-        await performSearch('');
       }
     }
     if (!loadingAuth) {
@@ -46,7 +50,6 @@ export default function AdminUsersPage() {
     try {
       let q;
       if (term.trim()) {
-        // Simple Firestore prefix search
         q = query(
           collection(db, 'users'),
           where('displayName', '>=', term),
@@ -57,7 +60,7 @@ export default function AdminUsersPage() {
       }
       
       const querySnapshot = await getDocs(q);
-      setUsers(querySnapshot.docs.map(d => ({ ...d.data() } as UserProfile)));
+      setUsers(querySnapshot.docs.map(d => ({ id: d.id, ...d.data() } as UserProfile)));
     } catch (e) {
       console.error(e);
       toast({ variant: 'destructive', title: "Search failed" });
@@ -98,7 +101,7 @@ export default function AdminUsersPage() {
     }
   };
 
-  if (loadingAuth || (!user && !loading)) {
+  if (loadingAuth) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
@@ -204,7 +207,7 @@ export default function AdminUsersPage() {
                       </TableCell>
                     </TableRow>
                   ))}
-                  {users.length === 0 && (
+                  {!loading && users.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={5} className="text-center py-12 text-muted-foreground">
                         No users found matching your search.

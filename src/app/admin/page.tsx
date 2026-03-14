@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect, useMemo } from 'react';
@@ -25,8 +24,13 @@ export default function AdminDashboard() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [totalUsers, setTotalUsers] = useState(0);
   const [dateRange, setDateRange] = useState<DateRange>('week');
+  const [mounted, setMounted] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (!loadingAuth && !user) router.push('/login');
@@ -103,7 +107,7 @@ export default function AdminDashboard() {
       .sort((a, b) => b.total - a.total);
   }, [allVisits]);
 
-  if (loadingAuth || !profile || loadingVisits) {
+  if (loadingAuth || !profile || loadingVisits || !mounted) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
