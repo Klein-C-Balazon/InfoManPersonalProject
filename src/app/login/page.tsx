@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { auth, db, googleProvider } from '@/lib/firebase';
 import { signInWithPopup, signOut } from 'firebase/auth';
-import { doc, getDoc, setDoc, Timestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, Timestamp, collection, getDocs, query, limit } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { BookOpen, AlertCircle, GraduationCap } from 'lucide-react';
@@ -55,11 +55,24 @@ export default function LoginPage() {
           return;
         }
       } else {
+        // Check if this is the very first user to assign admin role
+        let role: 'admin' | 'user' = 'user';
+        try {
+          const usersQuery = query(collection(db, 'users'), limit(1));
+          const usersSnap = await getDocs(usersQuery);
+          if (usersSnap.empty) {
+            role = 'admin';
+          }
+        } catch (e) {
+          // If we can't check, default to user
+          role = 'user';
+        }
+
         const newUser = {
           id: user.uid,
           email: user.email,
           displayName: user.displayName,
-          role: 'user',
+          role: role,
           collegeId: 'Not set',
           isBlocked: false,
           createdAt: Timestamp.now(),

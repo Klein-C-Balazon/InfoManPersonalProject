@@ -47,8 +47,9 @@ service cloud.firestore {
      */
     match /users/{userId} {
       allow get: if isOwner(userId) || isAdmin();
-      allow list: if isAdmin();
-      allow create: if isOwner(userId) && request.resource.data.id == userId;
+      // Allow list for all signed in users so they can check if the collection is empty during initial setup
+      allow list: if isSignedIn(); 
+      allow create: if isOwner(userId) && (request.resource.data.id == userId);
       allow update: if (resource != null && (isOwner(userId) || isAdmin())) && (request.resource.data.id == resource.data.id);
       allow delete: if resource != null && isAdmin();
     }

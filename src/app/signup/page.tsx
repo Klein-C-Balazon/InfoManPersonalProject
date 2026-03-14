@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { auth } from '@/lib/firebase';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
-import { doc, setDoc, collection, query, orderBy, Timestamp } from 'firebase/firestore';
+import { doc, setDoc, collection, query, orderBy, Timestamp, getDocs, limit } from 'firebase/firestore';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -50,11 +50,23 @@ export default function SignupPage() {
 
       await updateProfile(user, { displayName: name });
 
+      // Check if this is the very first user to assign admin role
+      let role: 'admin' | 'user' = 'user';
+      try {
+        const usersQuery = query(collection(db, 'users'), limit(1));
+        const usersSnap = await getDocs(usersQuery);
+        if (usersSnap.empty) {
+          role = 'admin';
+        }
+      } catch (e) {
+        role = 'user';
+      }
+
       const newUser = {
         id: user.uid,
         email: user.email,
         displayName: name,
-        role: 'user',
+        role: role,
         collegeId: collegeId,
         isBlocked: false,
         createdAt: Timestamp.now(),
