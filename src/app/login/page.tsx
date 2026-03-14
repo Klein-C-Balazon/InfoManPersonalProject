@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState } from 'react';
@@ -6,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { auth, db, googleProvider } from '@/lib/firebase';
 import { signInWithPopup, signOut, signInWithEmailAndPassword } from 'firebase/auth';
-import { doc, getDoc, setDoc, Timestamp, collection, getDocs, query, limit } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -18,8 +17,8 @@ import { FirestorePermissionError } from '@/firebase/errors';
 import { Separator } from '@/components/ui/separator';
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState('admin@neu.edu.ph');
+  const [password, setPassword] = useState('123123');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -48,7 +47,6 @@ export default function LoginPage() {
       }
       router.push('/dashboard');
     } else {
-      // If user doesn't exist in Firestore, they must sign up first to set their college
       await signOut(auth);
       setError('Account not found. Please sign up first to register your institutional profile.');
       setLoading(false);
