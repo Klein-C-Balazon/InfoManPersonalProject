@@ -1,16 +1,17 @@
-
 "use client"
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { auth, db, googleProvider } from '@/lib/firebase';
-import { signInWithEmailAndPassword, signInWithPopup, signOut } from 'firebase/auth';
+import { signInWithPopup, signOut } from 'firebase/auth';
 import { doc, getDoc, setDoc, Timestamp } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { BookOpen, AlertCircle, GraduationCap } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 export default function LoginPage() {
   const [error, setError] = useState('');
@@ -32,7 +33,18 @@ export default function LoginPage() {
       }
 
       const userRef = doc(db, 'users', user.uid);
-      const userSnap = await getDoc(userRef);
+      
+      let userSnap;
+      try {
+        userSnap = await getDoc(userRef);
+      } catch (e: any) {
+        const permissionError = new FirestorePermissionError({
+          path: userRef.path,
+          operation: 'get',
+        });
+        errorEmitter.emit('permission-error', permissionError);
+        throw e;
+      }
 
       if (userSnap.exists()) {
         const userData = userSnap.data();
@@ -43,20 +55,34 @@ export default function LoginPage() {
           return;
         }
       } else {
-        await setDoc(userRef, {
-          uid: user.uid,
+        const newUser = {
+          id: user.uid,
           email: user.email,
           displayName: user.displayName,
           role: 'user',
-          college: 'Not set',
+          collegeId: 'Not set',
           isBlocked: false,
           createdAt: Timestamp.now(),
-        });
+        };
+
+        try {
+          await setDoc(userRef, newUser);
+        } catch (e: any) {
+          const permissionError = new FirestorePermissionError({
+            path: userRef.path,
+            operation: 'create',
+            requestResourceData: newUser,
+          });
+          errorEmitter.emit('permission-error', permissionError);
+          throw e;
+        }
       }
 
       router.push('/dashboard');
     } catch (err: any) {
-      setError(err.message || 'Institutional login failed.');
+      if (!(err instanceof FirestorePermissionError)) {
+        setError(err.message || 'Institutional login failed.');
+      }
     } finally {
       setLoading(false);
     }

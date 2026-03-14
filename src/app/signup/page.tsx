@@ -14,12 +14,14 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { BookOpen, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { College } from '@/lib/models';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 export default function SignupPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
-  const [college, setCollege] = useState('');
+  const [collegeId, setCollegeId] = useState('');
   const [colleges, setColleges] = useState<College[]>([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -37,7 +39,7 @@ export default function SignupPage() {
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!college) {
+    if (!collegeId) {
       setError('Please select your college.');
       return;
     }
@@ -49,20 +51,34 @@ export default function SignupPage() {
 
       await updateProfile(user, { displayName: name });
 
-      // Create User Profile in Firestore
-      await setDoc(doc(db, 'users', user.uid), {
-        uid: user.uid,
+      const newUser = {
+        id: user.uid,
         email: user.email,
         displayName: name,
         role: 'user',
-        college: college,
+        collegeId: collegeId,
         isBlocked: false,
         createdAt: Timestamp.now(),
-      });
+      };
+
+      const userRef = doc(db, 'users', user.uid);
+      try {
+        await setDoc(userRef, newUser);
+      } catch (e: any) {
+        const permissionError = new FirestorePermissionError({
+          path: userRef.path,
+          operation: 'create',
+          requestResourceData: newUser,
+        });
+        errorEmitter.emit('permission-error', permissionError);
+        throw e;
+      }
 
       router.push('/dashboard');
     } catch (err: any) {
-      setError(err.message || 'Failed to create account.');
+      if (!(err instanceof FirestorePermissionError)) {
+        setError(err.message || 'Failed to create account.');
+      }
     } finally {
       setLoading(false);
     }
@@ -117,7 +133,7 @@ export default function SignupPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="college">Institutional Affiliation</Label>
-                <Select onValueChange={setCollege} value={college}>
+                <Select onValueChange={setCollegeId} value={collegeId}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select your college" />
                   </SelectTrigger>

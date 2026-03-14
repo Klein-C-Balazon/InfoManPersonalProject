@@ -3,11 +3,11 @@ import { Timestamp } from "firebase/firestore";
 export type UserRole = 'admin' | 'user';
 
 export interface UserProfile {
-  uid: string;
+  id: string; // Changed from uid to id to match backend.json and rules
   email: string | null;
   displayName: string | null;
   role: UserRole;
-  college: string;
+  collegeId: string; // Changed from college to collegeId for institutional consistency
   isBlocked: boolean;
   createdAt: Timestamp;
 }
@@ -18,7 +18,7 @@ export interface VisitLog {
   userDisplayName: string;
   timestamp: Timestamp;
   purposeOfVisit: string;
-  college: string;
+  collegeId: string;
 }
 
 export interface College {
