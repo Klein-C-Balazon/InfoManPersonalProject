@@ -193,7 +193,7 @@ export default function SignupPage() {
             </p>
             <Separator className="w-1/2" />
             <Link href="/admin/login" className="text-xs text-muted-foreground hover:text-primary transition-colors">
-              Library Staff Portal
+              Admin Portal
             </Link>
           </CardFooter>
         </Card>

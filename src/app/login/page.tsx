@@ -51,7 +51,6 @@ export default function LoginPage() {
           router.push('/dashboard');
         }
       } else {
-        // For admin@neu.edu.ph, if the profile doesn't exist but they logged in, create it (prototype helper)
         if (firebaseUser.email === ADMIN_EMAIL) {
           await setDoc(userRef, {
             id: firebaseUser.uid,
@@ -99,7 +98,6 @@ export default function LoginPage() {
     setLoading(true);
     setError('');
     try {
-      // Use the hardcoded admin email and the provided admin password
       const result = await signInWithEmailAndPassword(auth, ADMIN_EMAIL, adminPassword);
       await handleInstitutionalRedirect(result.user);
     } catch (err: any) {
@@ -167,7 +165,7 @@ export default function LoginPage() {
                 </TabsTrigger>
                 <TabsTrigger value="admin" className="rounded-lg flex items-center gap-2">
                   <ShieldCheck className="h-4 w-4" />
-                  Library Staff
+                  Admin
                 </TabsTrigger>
               </TabsList>
 
@@ -257,13 +255,13 @@ export default function LoginPage() {
               <TabsContent value="admin" className="space-y-6">
                 <form onSubmit={handleAdminLogin} className="space-y-6">
                   <div className="space-y-2">
-                    <Label htmlFor="adminPassword">Administrator Security Key</Label>
+                    <Label htmlFor="adminPassword">Admin Security Key</Label>
                     <div className="relative">
                       <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                       <input 
                         id="adminPassword" 
                         type="password" 
-                        placeholder="Enter 123123 to access" 
+                        placeholder="Enter security key" 
                         className="flex h-12 w-full rounded-xl border border-input bg-background px-10 py-2 text-base ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
                         value={adminPassword}
                         onChange={(e) => setAdminPassword(e.target.value)}
@@ -284,7 +282,7 @@ export default function LoginPage() {
                     ) : 'Unlock Admin Dashboard'}
                   </Button>
                   <p className="text-center text-xs text-muted-foreground">
-                    Restricted area for library staff only.
+                    Restricted area for admins only.
                   </p>
                 </form>
               </TabsContent>

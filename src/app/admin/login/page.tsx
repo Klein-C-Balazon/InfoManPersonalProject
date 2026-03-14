@@ -27,21 +27,18 @@ export default function AdminLoginPage() {
 
   const handleAdminAuth = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
+    loadingAuth(true);
     setError('');
     
     try {
-      // 1. Attempt Sign In
       try {
         await signInWithEmailAndPassword(auth, ADMIN_EMAIL, password);
       } catch (signInError: any) {
-        // 2. If user doesn't exist, auto-create it (seeding logic for prototype)
         if (signInError.code === 'auth/user-not-found' || signInError.code === 'auth/invalid-credential') {
           try {
             const userCredential = await createUserWithEmailAndPassword(auth, ADMIN_EMAIL, password);
             const user = userCredential.user;
             
-            // Initialize Admin Profile
             await setDoc(doc(db, 'users', user.uid), {
               id: user.uid,
               email: ADMIN_EMAIL,
@@ -52,7 +49,6 @@ export default function AdminLoginPage() {
               createdAt: Timestamp.now(),
             });
           } catch (createError) {
-            // If creation fails, it's likely just a wrong password for an existing account
             throw signInError; 
           }
         } else {
@@ -60,7 +56,6 @@ export default function AdminLoginPage() {
         }
       }
 
-      // 3. Verify Role and Redirect
       const user = auth.currentUser;
       if (user) {
         const userSnap = await getDoc(doc(db, 'users', user.uid));
@@ -88,14 +83,14 @@ export default function AdminLoginPage() {
             </div>
           </div>
           <h1 className="font-headline font-bold text-3xl tracking-tight text-white">
-            Staff Portal
+            Admin Portal
           </h1>
           <p className="text-slate-400">Restricted Area for Library Administrators</p>
         </div>
 
         <Card className="shadow-2xl border-white/5 bg-slate-800/50 backdrop-blur-xl overflow-hidden rounded-3xl text-white">
           <CardHeader className="bg-white/5 pb-8 pt-10 text-center border-b border-white/5">
-            <CardTitle className="text-2xl text-white">Admin Security Check</CardTitle>
+            <CardTitle className="text-2xl text-white">Security Check</CardTitle>
             <CardDescription className="text-slate-400">Enter access key to continue</CardDescription>
           </CardHeader>
           <CardContent className="pt-8 px-8 space-y-6">
