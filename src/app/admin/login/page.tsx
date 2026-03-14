@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState } from 'react';
@@ -61,12 +62,12 @@ export default function AdminLoginPage() {
           router.push('/admin');
         } else {
           await signOut(auth);
-          setError('Access Denied: This account exists but does not have administrative privileges.');
+          setError('Access Denied: Administrative privileges required.');
           setLoading(false);
         }
       }
     } catch (err: any) {
-      setError('Authentication failed. Ensure you are using the correct admin security key.');
+      setError('Access Denied: Invalid admin security key.');
       setLoading(false);
     }
   };
@@ -83,13 +84,13 @@ export default function AdminLoginPage() {
           <h1 className="font-headline font-bold text-3xl tracking-tight text-white">
             Admin Portal
           </h1>
-          <p className="text-slate-400">Restricted Area for Library Administrators</p>
+          <p className="text-slate-400">Security Access Only</p>
         </div>
 
         <Card className="shadow-2xl border-white/5 bg-slate-800/50 backdrop-blur-xl overflow-hidden rounded-3xl text-white">
           <CardHeader className="bg-white/5 pb-8 pt-10 text-center border-b border-white/5">
             <CardTitle className="text-2xl text-white">Security Check</CardTitle>
-            <CardDescription className="text-slate-400">Enter admin security key to continue</CardDescription>
+            <CardDescription className="text-slate-400">Enter security key to continue</CardDescription>
           </CardHeader>
           <CardContent className="pt-8 px-8 space-y-6">
             {error && (
@@ -102,7 +103,7 @@ export default function AdminLoginPage() {
 
             <form onSubmit={handleAdminAuth} className="space-y-6">
               <div className="space-y-2">
-                <Label htmlFor="password">Admin Security Password</Label>
+                <Label htmlFor="password">Security Key</Label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
                   <input 
@@ -121,12 +122,7 @@ export default function AdminLoginPage() {
                 className="w-full h-12 font-bold rounded-xl bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20" 
                 disabled={loading}
               >
-                {loading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Verifying...
-                  </>
-                ) : 'Unlock Admin Dashboard'}
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Unlock Admin Dashboard'}
               </Button>
             </form>
           </CardContent>

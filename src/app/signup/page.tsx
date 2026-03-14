@@ -1,8 +1,8 @@
 
 "use client"
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
@@ -15,12 +15,11 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { BookOpen, AlertCircle, Loader2 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { College, UserRole } from '@/lib/models';
-import { errorEmitter } from '@/firebase/error-emitter';
-import { FirestorePermissionError } from '@/firebase/errors';
 import { DEFAULT_COLLEGES } from '@/lib/constants';
 import { Separator } from '@/components/ui/separator';
 
-export default function SignupPage() {
+function SignupForm() {
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -32,13 +31,19 @@ export default function SignupPage() {
   const db = useFirestore();
   const auth = useAuth();
 
+  useEffect(() => {
+    const preEmail = searchParams.get('email');
+    const preName = searchParams.get('name');
+    if (preEmail) setEmail(preEmail);
+    if (preName) setName(preName);
+  }, [searchParams]);
+
   const collegesQuery = useMemoFirebase(() => {
     if (!db) return null;
     return query(collection(db, 'colleges'), orderBy('name', 'asc'));
   }, [db]);
 
   const { data: dbColleges, isLoading: loadingColleges } = useCollection<College>(collegesQuery);
-
   const displayColleges = (dbColleges && dbColleges.length > 0) ? dbColleges : DEFAULT_COLLEGES;
 
   const handleSignup = async (e: React.FormEvent) => {
@@ -55,8 +60,13 @@ export default function SignupPage() {
     setLoading(true);
     setError('');
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
+      let user = auth.currentUser;
+      
+      // If not already signed in via Google, create email account
+      if (!user || user.email !== email) {
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        user = userCredential.user;
+      }
 
       await updateProfile(user, { displayName: name });
 
@@ -70,33 +80,103 @@ export default function SignupPage() {
         createdAt: Timestamp.now(),
       };
 
-      const userRef = doc(db, 'users', user.uid);
-      try {
-        await setDoc(userRef, newUser);
-      } catch (e: any) {
-        const permissionError = new FirestorePermissionError({
-          path: userRef.path,
-          operation: 'create',
-          requestResourceData: newUser,
-        });
-        errorEmitter.emit('permission-error', permissionError);
-        throw e;
-      }
-
+      await setDoc(doc(db, 'users', user.uid), newUser);
       router.push('/dashboard');
     } catch (err: any) {
-      if (!(err instanceof FirestorePermissionError)) {
-        if (err.code === 'auth/email-already-in-use') {
-          setError('This account already exists. Please log in instead.');
-        } else {
-          setError(err.message || 'Failed to create account.');
-        }
+      if (err.code === 'auth/email-already-in-use') {
+        setError('This account already exists. Please log in instead.');
+      } else {
+        setError(err.message || 'Failed to create account.');
       }
     } finally {
       setLoading(false);
     }
   };
 
+  return (
+    <Card className="shadow-lg border-primary/10 rounded-2xl overflow-hidden">
+      <CardHeader className="bg-primary/5 pb-6 text-center">
+        <CardTitle>Create Account</CardTitle>
+        <CardDescription>Institutional credentials required</CardDescription>
+      </CardHeader>
+      <CardContent className="pt-6">
+        <form onSubmit={handleSignup} className="space-y-5">
+          {error && (
+            <Alert variant="destructive" className="rounded-xl">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Registration Error</AlertTitle>
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+
+          <div className="space-y-2">
+            <Label htmlFor="name">Full Name</Label>
+            <Input 
+              id="name" 
+              placeholder="John Doe" 
+              className="rounded-xl h-11"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required 
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="email">Institutional Email (@neu.edu.ph)</Label>
+            <Input 
+              id="email" 
+              type="email" 
+              placeholder="name@neu.edu.ph" 
+              className="rounded-xl h-11"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required 
+              disabled={!!searchParams.get('email')}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="college">Institutional Affiliation</Label>
+            <Select onValueChange={setCollegeId} value={collegeId}>
+              <SelectTrigger className="rounded-xl h-11">
+                <SelectValue placeholder={loadingColleges ? "Loading colleges..." : "Select your college"} />
+              </SelectTrigger>
+              <SelectContent className="rounded-xl">
+                {displayColleges.map((col) => (
+                  <SelectItem key={col.id} value={col.id}>
+                    {col.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {!searchParams.get('email') && (
+            <div className="space-y-2">
+              <Label htmlFor="password">Security Password</Label>
+              <Input 
+                id="password" 
+                type="password" 
+                className="rounded-xl h-11"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required 
+                minLength={6}
+              />
+            </div>
+          )}
+          <Button type="submit" className="w-full h-12 rounded-xl text-md font-bold" disabled={loading}>
+            {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : 'Complete Registration'}
+          </Button>
+        </form>
+      </CardContent>
+      <CardFooter className="flex flex-col gap-3 justify-center border-t py-6 bg-secondary/10">
+        <p className="text-sm text-muted-foreground">
+          Already registered? <Link href="/login" className="text-primary font-bold hover:underline">Log in here</Link>
+        </p>
+      </CardFooter>
+    </Card>
+  );
+}
+
+export default function SignupPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-4 py-12">
       <div className="w-full max-w-md space-y-8">
@@ -105,98 +185,12 @@ export default function SignupPage() {
             <BookOpen className="h-10 w-10 text-primary" />
             <span className="font-headline font-bold text-3xl tracking-tight text-primary">StudyHub</span>
           </Link>
-          <h2 className="text-2xl font-bold tracking-tight text-foreground">Student & Faculty Registration</h2>
-          <p className="text-muted-foreground">Register your visitor profile for NEU Library</p>
+          <h2 className="text-2xl font-bold tracking-tight text-foreground">Welcome to NEU Library!</h2>
+          <p className="text-muted-foreground">Register your visitor profile below</p>
         </div>
-
-        <Card className="shadow-lg border-primary/10 rounded-2xl overflow-hidden">
-          <CardHeader className="bg-primary/5 pb-6 text-center">
-            <CardTitle>Create Account</CardTitle>
-            <CardDescription>Institutional credentials required</CardDescription>
-          </CardHeader>
-          <CardContent className="pt-6">
-            <form onSubmit={handleSignup} className="space-y-5">
-              {error && (
-                <Alert variant="destructive" className="rounded-xl">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertTitle>Registration Error</AlertTitle>
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
-
-              <div className="space-y-2">
-                <Label htmlFor="name">Full Name</Label>
-                <Input 
-                  id="name" 
-                  placeholder="John Doe" 
-                  className="rounded-xl h-11"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required 
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="email">Institutional Email (@neu.edu.ph)</Label>
-                <Input 
-                  id="email" 
-                  type="email" 
-                  placeholder="name@neu.edu.ph" 
-                  className="rounded-xl h-11"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required 
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="college">Institutional Affiliation</Label>
-                <Select onValueChange={setCollegeId} value={collegeId}>
-                  <SelectTrigger className="rounded-xl h-11">
-                    <SelectValue placeholder={loadingColleges ? "Loading colleges..." : "Select your college"} />
-                  </SelectTrigger>
-                  <SelectContent className="rounded-xl">
-                    {displayColleges.map((col) => (
-                      <SelectItem key={col.id} value={col.id}>
-                        {col.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="password">Security Password</Label>
-                <Input 
-                  id="password" 
-                  type="password" 
-                  className="rounded-xl h-11"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required 
-                  minLength={6}
-                />
-              </div>
-              <Button type="submit" className="w-full h-12 rounded-xl text-md font-bold" disabled={loading}>
-                {loading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Processing Registration...
-                  </>
-                ) : 'Complete Signup'}
-              </Button>
-            </form>
-          </CardContent>
-          <CardFooter className="flex flex-col gap-3 justify-center border-t py-6 bg-secondary/10">
-            <p className="text-sm text-muted-foreground">
-              Already registered?{' '}
-              <Link href="/login" className="text-primary font-bold hover:underline">
-                Log in here
-              </Link>
-            </p>
-            <Separator className="w-1/2" />
-            <Link href="/admin/login" className="text-xs text-muted-foreground hover:text-primary transition-colors">
-              Admin Portal
-            </Link>
-          </CardFooter>
-        </Card>
+        <Suspense fallback={<div className="flex justify-center p-12"><Loader2 className="animate-spin" /></div>}>
+          <SignupForm />
+        </Suspense>
       </div>
     </div>
   );

@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState } from 'react';
@@ -49,6 +50,7 @@ export default function LoginPage() {
           router.push('/dashboard');
         }
       } else {
+        // If it's the admin email, auto-initialize
         if (firebaseUser.email === ADMIN_EMAIL) {
           await setDoc(userRef, {
             id: firebaseUser.uid,
@@ -63,16 +65,15 @@ export default function LoginPage() {
           return;
         }
 
-        await signOut(auth);
-        setError('Profile not found. Please sign up first to register your institutional account.');
-        setLoading(false);
+        // If it's a student (Google/Email) and no profile exists, redirect to complete profile
+        const params = new URLSearchParams({
+          email: firebaseUser.email || '',
+          name: firebaseUser.displayName || '',
+          googleId: firebaseUser.uid
+        });
+        router.push(`/signup?${params.toString()}`);
       }
     } catch (e: any) {
-      const permissionError = new FirestorePermissionError({
-        path: userRef.path,
-        operation: 'get',
-      });
-      errorEmitter.emit('permission-error', permissionError);
       setError('A security restriction prevented your profile access.');
       setLoading(false);
     }
@@ -86,7 +87,7 @@ export default function LoginPage() {
       const result = await signInWithEmailAndPassword(auth, email, password);
       await handleInstitutionalRedirect(result.user);
     } catch (err: any) {
-      setError('Account not found or password incorrect. Please sign up first if you are new.');
+      setError('Account not found or password incorrect.');
       setLoading(false);
     }
   };
@@ -135,9 +136,7 @@ export default function LoginPage() {
 
       await handleInstitutionalRedirect(user);
     } catch (err: any) {
-      if (err.code === 'auth/popup-closed-by-user') {
-        setError('The sign-in popup was closed before completion. Please try again.');
-      } else {
+      if (err.code !== 'auth/popup-closed-by-user') {
         setError(err.message || 'Institutional login failed.');
       }
       setLoading(false);
@@ -164,13 +163,13 @@ export default function LoginPage() {
           <h1 className="font-headline font-bold text-4xl tracking-tight text-foreground">
             StudyHub <span className="text-primary">Tracker</span>
           </h1>
-          <p className="text-muted-foreground text-lg">NEU Library Visitor Portal</p>
+          <p className="text-muted-foreground text-lg">Welcome to NEU Library!</p>
         </div>
 
         <Card className="shadow-2xl border-primary/5 overflow-hidden rounded-3xl">
           <CardHeader className="bg-primary/5 pb-8 pt-10 text-center">
             <CardTitle className="text-2xl">Access Portal</CardTitle>
-            <CardDescription>Select your access mode</CardDescription>
+            <CardDescription>Enter your credentials to continue</CardDescription>
           </CardHeader>
           <CardContent className="pt-4 px-8 space-y-6">
             <Tabs defaultValue="user" className="w-full">
@@ -191,16 +190,32 @@ export default function LoginPage() {
                   <AlertTitle>Access Issue</AlertTitle>
                   <AlertDescription className="flex flex-col gap-2">
                     <span>{error}</span>
-                    {!error.includes('Denied') && (
-                      <Button variant="link" asChild className="p-0 h-auto text-destructive font-bold justify-start">
-                        <Link href="/signup">Click here to Sign Up →</Link>
-                      </Button>
-                    )}
                   </AlertDescription>
                 </Alert>
               )}
 
               <TabsContent value="user" className="space-y-6">
+                <Button 
+                  type="button" 
+                  variant="outline"
+                  size="lg"
+                  className="w-full h-14 text-md font-semibold rounded-xl flex items-center justify-center gap-3 transition-all hover:bg-secondary/50" 
+                  onClick={handleGoogleLogin}
+                  disabled={loading}
+                >
+                  <GraduationCap className="h-5 w-5" />
+                  Sign in with Google Account
+                </Button>
+
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <Separator className="w-full" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-background px-2 text-muted-foreground">Or email access</span>
+                  </div>
+                </div>
+
                 <form onSubmit={handleEmailLogin} className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="email">Institutional Email</Label>
@@ -210,7 +225,7 @@ export default function LoginPage() {
                         id="email" 
                         type="email" 
                         placeholder="name@neu.edu.ph" 
-                        className="flex h-12 w-full rounded-xl border border-input bg-background px-10 py-2 text-base ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
+                        className="flex h-12 w-full rounded-xl border border-input bg-background px-10 py-2 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         required 
@@ -225,7 +240,7 @@ export default function LoginPage() {
                         id="password" 
                         type="password" 
                         placeholder="••••••••" 
-                        className="flex h-12 w-full rounded-xl border border-input bg-background px-10 py-2 text-base ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
+                        className="flex h-12 w-full rounded-xl border border-input bg-background px-10 py-2 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         required 
@@ -237,35 +252,9 @@ export default function LoginPage() {
                     className="w-full h-12 font-semibold rounded-xl" 
                     disabled={loading}
                   >
-                    {loading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Authenticating...
-                      </>
-                    ) : 'Sign In'}
+                    {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Sign In'}
                   </Button>
                 </form>
-                
-                <div className="relative">
-                  <div className="absolute inset-0 flex items-center">
-                    <Separator className="w-full" />
-                  </div>
-                  <div className="relative flex justify-center text-xs uppercase">
-                    <span className="bg-background px-2 text-muted-foreground">Or continue with</span>
-                  </div>
-                </div>
-
-                <Button 
-                  type="button" 
-                  variant="outline"
-                  size="lg"
-                  className="w-full h-14 text-md font-semibold rounded-xl flex items-center justify-center gap-3 transition-all hover:bg-secondary/50" 
-                  onClick={handleGoogleLogin}
-                  disabled={loading}
-                >
-                  <GraduationCap className="h-5 w-5" />
-                  Sign in with Google Account
-                </Button>
               </TabsContent>
 
               <TabsContent value="admin" className="space-y-6">
@@ -278,7 +267,7 @@ export default function LoginPage() {
                         id="adminPassword" 
                         type="password" 
                         placeholder="••••••••" 
-                        className="flex h-12 w-full rounded-xl border border-input bg-background px-10 py-2 text-base ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
+                        className="flex h-12 w-full rounded-xl border border-input bg-background px-10 py-2 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                         value={adminPassword}
                         onChange={(e) => setAdminPassword(e.target.value)}
                         required 
@@ -290,23 +279,15 @@ export default function LoginPage() {
                     className="w-full h-12 font-bold rounded-xl bg-slate-900 hover:bg-slate-800 text-white" 
                     disabled={loading}
                   >
-                    {loading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Verifying...
-                      </>
-                    ) : 'Unlock Admin Dashboard'}
+                    {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Unlock Admin Dashboard'}
                   </Button>
-                  <p className="text-center text-xs text-muted-foreground">
-                    Restricted area for admins only.
-                  </p>
                 </form>
               </TabsContent>
             </Tabs>
           </CardContent>
           <CardFooter className="bg-secondary/20 flex flex-col gap-3 py-6 text-center">
             <p className="text-sm text-muted-foreground">
-              New to the library? <Link href="/signup" className="text-primary font-bold hover:underline">Create a student profile</Link>
+              New to the library? <Link href="/signup" className="text-primary font-bold hover:underline">Register student profile</Link>
             </p>
           </CardFooter>
         </Card>
