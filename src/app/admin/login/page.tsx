@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState } from 'react';
@@ -27,7 +26,7 @@ export default function AdminLoginPage() {
 
   const handleAdminAuth = async (e: React.FormEvent) => {
     e.preventDefault();
-    loadingAuth(true);
+    setLoading(true);
     setError('');
     
     try {
@@ -91,7 +90,7 @@ export default function AdminLoginPage() {
         <Card className="shadow-2xl border-white/5 bg-slate-800/50 backdrop-blur-xl overflow-hidden rounded-3xl text-white">
           <CardHeader className="bg-white/5 pb-8 pt-10 text-center border-b border-white/5">
             <CardTitle className="text-2xl text-white">Security Check</CardTitle>
-            <CardDescription className="text-slate-400">Enter access key to continue</CardDescription>
+            <CardDescription className="text-slate-400">Enter admin security key to continue</CardDescription>
           </CardHeader>
           <CardContent className="pt-8 px-8 space-y-6">
             {error && (
@@ -104,13 +103,13 @@ export default function AdminLoginPage() {
 
             <form onSubmit={handleAdminAuth} className="space-y-6">
               <div className="space-y-2">
-                <Label htmlFor="password">Administrator Password</Label>
+                <Label htmlFor="password">Admin Security Password</Label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
                   <Input 
                     id="password" 
                     type="password" 
-                    placeholder="Enter security key" 
+                    placeholder="Hint: Admin123" 
                     className="pl-10 h-12 rounded-xl bg-slate-900/50 border-white/10 text-white placeholder:text-slate-500 focus:ring-primary/50"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}

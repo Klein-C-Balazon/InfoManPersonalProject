@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState } from 'react';
@@ -8,7 +7,6 @@ import { useAuth, useFirestore, useUser } from '@/firebase';
 import { signInWithPopup, signOut, signInWithEmailAndPassword, GoogleAuthProvider } from 'firebase/auth';
 import { doc, getDoc, setDoc, Timestamp } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { BookOpen, AlertCircle, GraduationCap, Mail, Lock, Loader2, ShieldCheck, User } from 'lucide-react';
@@ -101,7 +99,7 @@ export default function LoginPage() {
       const result = await signInWithEmailAndPassword(auth, ADMIN_EMAIL, adminPassword);
       await handleInstitutionalRedirect(result.user);
     } catch (err: any) {
-      setError('Access Denied: Invalid administrator security key.');
+      setError('Access Denied: Invalid admin security key.');
       setLoading(false);
     }
   };
@@ -261,7 +259,7 @@ export default function LoginPage() {
                       <input 
                         id="adminPassword" 
                         type="password" 
-                        placeholder="Enter security key" 
+                        placeholder="Hint: Admin123" 
                         className="flex h-12 w-full rounded-xl border border-input bg-background px-10 py-2 text-base ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
                         value={adminPassword}
                         onChange={(e) => setAdminPassword(e.target.value)}
