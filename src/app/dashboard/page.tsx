@@ -10,10 +10,9 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { CheckCircle2, Loader2, Library, GraduationCap, ClipboardCheck, ArrowRight, AlertCircle } from 'lucide-react';
+import { CheckCircle2, Loader2, Library, GraduationCap, ClipboardCheck, ArrowRight, Sparkles } from 'lucide-react';
 import { College, UserProfile } from '@/lib/models';
 import { useToast } from '@/hooks/use-toast';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { DEFAULT_COLLEGES } from '@/lib/constants';
 
 export default function DashboardPage() {
@@ -148,12 +147,20 @@ export default function DashboardPage() {
       <Navbar />
       <main className="flex-1 container mx-auto px-4 py-8 md:py-16 flex flex-col items-center">
         <div className="w-full max-w-xl space-y-8">
-          <div className="space-y-2 text-center">
-            <h1 className="text-3xl font-bold tracking-tight text-slate-900">Student Check-in</h1>
-            <p className="text-slate-500">Please provide your visit details below</p>
+          <div className="space-y-4 text-center">
+            <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-4 py-1.5 rounded-full text-sm font-bold animate-in fade-in slide-in-from-bottom-2 duration-500">
+              <Sparkles className="h-4 w-4" />
+              NEU Library Portal
+            </div>
+            <h1 className="text-4xl font-bold tracking-tight text-slate-900 font-headline animate-in fade-in slide-in-from-bottom-3 duration-700">
+              Welcome to NEU Library!
+            </h1>
+            <p className="text-slate-500 text-lg animate-in fade-in slide-in-from-bottom-4 duration-1000">
+              Hello, <span className="text-primary font-bold">{profile?.displayName || user.displayName || 'Student'}</span>! Please provide your visit details below.
+            </p>
           </div>
 
-          <Card className="shadow-xl border-none rounded-3xl overflow-hidden">
+          <Card className="shadow-xl border-none rounded-3xl overflow-hidden animate-in slide-in-from-bottom-6 duration-1000">
             <CardHeader className="bg-white border-b border-slate-100 p-8">
               <div className="flex items-center gap-4">
                 <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
