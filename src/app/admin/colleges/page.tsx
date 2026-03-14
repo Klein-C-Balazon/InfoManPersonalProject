@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { collection, getDocs, doc, setDoc, deleteDoc, query, orderBy, Timestamp, getDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, deleteDoc, query, orderBy, Timestamp, getDoc, writeBatch } from 'firebase/firestore';
 import { useUser, useFirestore } from '@/firebase';
 import { Navbar } from '@/components/navbar';
 import { Button } from '@/components/ui/button';
@@ -10,10 +10,23 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Trash2, Plus, ArrowLeft, Loader2, School } from 'lucide-react';
+import { Trash2, Plus, ArrowLeft, Loader2, School, DatabaseBackup } from 'lucide-react';
 import { College } from '@/lib/models';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
+
+const DEFAULT_COLLEGES = [
+  "College of Engineering and Architecture",
+  "College of Nursing",
+  "College of Business Administration",
+  "College of Arts and Sciences",
+  "College of Computer Studies",
+  "College of Education",
+  "College of Communication",
+  "College of Criminology",
+  "College of Medicine",
+  "College of Law"
+];
 
 export default function AdminCollegesPage() {
   const { user, isUserLoading: loadingAuth } = useUser();
@@ -22,8 +35,22 @@ export default function AdminCollegesPage() {
   const [newCollegeName, setNewCollegeName] = useState('');
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
+  const [seeding, setSeeding] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
+
+  const fetchColleges = async () => {
+    setLoading(true);
+    try {
+      const q = query(collection(db, 'colleges'), orderBy('name', 'asc'));
+      const querySnapshot = await getDocs(q);
+      setColleges(querySnapshot.docs.map(d => ({ id: d.id, ...d.data() } as College)));
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     async function checkAuthAndFetch() {
@@ -33,11 +60,7 @@ export default function AdminCollegesPage() {
           router.push('/dashboard');
           return;
         }
-
-        const q = query(collection(db, 'colleges'), orderBy('name', 'asc'));
-        const querySnapshot = await getDocs(q);
-        setColleges(querySnapshot.docs.map(d => ({ id: d.id, ...d.data() } as College)));
-        setLoading(false);
+        await fetchColleges();
       }
     }
     if (!loadingAuth) {
@@ -56,13 +79,35 @@ export default function AdminCollegesPage() {
         name: newCollegeName,
         addedAt: Timestamp.now()
       });
-      setColleges(prev => [...prev, { id, name: newCollegeName, addedAt: Timestamp.now() }].sort((a,b) => a.name.localeCompare(b.name)));
+      await fetchColleges();
       setNewCollegeName('');
       toast({ title: "College Added" });
     } catch (e) {
       toast({ variant: 'destructive', title: "Failed to add college" });
     } finally {
       setAdding(false);
+    }
+  };
+
+  const seedColleges = async () => {
+    setSeeding(true);
+    try {
+      const batch = writeBatch(db);
+      DEFAULT_COLLEGES.forEach(name => {
+        const id = name.toLowerCase().replace(/\s+/g, '-');
+        const docRef = doc(db, 'colleges', id);
+        batch.set(docRef, {
+          name: name,
+          addedAt: Timestamp.now()
+        });
+      });
+      await batch.commit();
+      await fetchColleges();
+      toast({ title: "Default Colleges Seeded", description: "Standard institutional departments have been added." });
+    } catch (e) {
+      toast({ variant: 'destructive', title: "Seeding Failed" });
+    } finally {
+      setSeeding(false);
     }
   };
 
@@ -89,14 +134,22 @@ export default function AdminCollegesPage() {
     <div className="min-h-screen bg-background">
       <Navbar />
       <main className="container mx-auto px-4 py-8">
-        <div className="mb-6 flex items-center gap-4">
-           <Button variant="ghost" size="sm" asChild>
-             <Link href="/admin"><ArrowLeft className="h-4 w-4 mr-1" /> Back</Link>
-           </Button>
-           <div>
-            <h1 className="text-2xl font-bold font-headline">College Roster</h1>
-            <p className="text-muted-foreground">Define institutional affiliations for users</p>
-           </div>
+        <div className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+             <Button variant="ghost" size="sm" asChild>
+               <Link href="/admin"><ArrowLeft className="h-4 w-4 mr-1" /> Back</Link>
+             </Button>
+             <div>
+              <h1 className="text-2xl font-bold font-headline">College Roster</h1>
+              <p className="text-muted-foreground">Define institutional affiliations for users</p>
+             </div>
+          </div>
+          {colleges.length === 0 && (
+            <Button variant="outline" onClick={seedColleges} disabled={seeding} className="gap-2">
+              <DatabaseBackup className="h-4 w-4" />
+              {seeding ? 'Seeding...' : 'Seed Default Colleges'}
+            </Button>
+          )}
         </div>
 
         <div className="grid gap-8 md:grid-cols-3">
@@ -155,8 +208,13 @@ export default function AdminCollegesPage() {
                   ))}
                   {colleges.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={2} className="text-center py-8 text-muted-foreground">
-                        No colleges defined. Add one to get started.
+                      <TableCell colSpan={2} className="text-center py-12">
+                        <div className="flex flex-col items-center gap-4 text-muted-foreground">
+                          <p>No colleges defined yet.</p>
+                          <Button variant="secondary" onClick={seedColleges} disabled={seeding}>
+                            Initialize with Defaults
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   )}

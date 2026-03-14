@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect } from 'react';
@@ -10,9 +9,10 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { CheckCircle2, Loader2, Library, GraduationCap, ClipboardCheck, ArrowRight } from 'lucide-react';
+import { CheckCircle2, Loader2, Library, GraduationCap, ClipboardCheck, ArrowRight, AlertCircle } from 'lucide-react';
 import { College, UserProfile } from '@/lib/models';
 import { useToast } from '@/hooks/use-toast';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 export default function DashboardPage() {
   const { user, isUserLoading: loadingAuth } = useUser();
@@ -50,7 +50,7 @@ export default function DashboardPage() {
             return;
           }
           setProfile(profileData);
-          if (profileData.collegeId) {
+          if (profileData.collegeId && profileData.collegeId !== 'Not set') {
             setSelectedCollegeId(profileData.collegeId);
           }
         }
@@ -66,7 +66,8 @@ export default function DashboardPage() {
     if (!purpose || !selectedCollegeId || !user) return;
     setSubmitting(true);
 
-    const collegeName = colleges?.find(c => c.id === selectedCollegeId)?.name || selectedCollegeId;
+    const collegeObj = colleges?.find(c => c.id === selectedCollegeId);
+    const collegeName = collegeObj?.name || selectedCollegeId;
 
     try {
       const visitData = {
@@ -74,8 +75,8 @@ export default function DashboardPage() {
         userDisplayName: profile?.displayName || user.displayName || 'Unknown Student',
         timestamp: Timestamp.now(),
         purposeOfVisit: purpose,
-        collegeId: selectedCollegeId, // Storing the ID for relational consistency
-        collegeName: collegeName // Denormalizing name for easy display in logs
+        collegeId: selectedCollegeId,
+        collegeName: collegeName 
       };
 
       await addDoc(collection(db, 'visits'), visitData);
@@ -147,6 +148,16 @@ export default function DashboardPage() {
             <p className="text-slate-500">Please provide your visit details below</p>
           </div>
 
+          {!loadingColleges && (!colleges || colleges.length === 0) && (
+            <Alert className="bg-amber-50 border-amber-200 text-amber-800">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>No Colleges Registered</AlertTitle>
+              <AlertDescription>
+                The institutional directory is currently empty. Please contact an administrator to register your college.
+              </AlertDescription>
+            </Alert>
+          )}
+
           <Card className="shadow-xl border-none rounded-3xl overflow-hidden">
             <CardHeader className="bg-white border-b border-slate-100 p-8">
               <div className="flex items-center gap-4">
@@ -197,9 +208,6 @@ export default function DashboardPage() {
                             {col.name}
                           </SelectItem>
                         ))}
-                        {!loadingColleges && (!colleges || colleges.length === 0) && (
-                          <SelectItem value="none" disabled>No colleges available</SelectItem>
-                        )}
                       </SelectContent>
                     </Select>
                   </div>

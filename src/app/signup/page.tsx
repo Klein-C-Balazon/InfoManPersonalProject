@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect } from 'react';
@@ -143,11 +142,14 @@ export default function SignupPage() {
                         {col.name}
                       </SelectItem>
                     ))}
-                    {!loadingColleges && (!colleges || colleges.length === 0) && (
-                      <SelectItem value="none" disabled>No colleges available</SelectItem>
-                    )}
                   </SelectContent>
                 </Select>
+                {!loadingColleges && (!colleges || colleges.length === 0) && (
+                  <p className="text-xs text-amber-600 flex items-center gap-1 mt-1">
+                    <AlertCircle className="h-3 w-3" />
+                    No colleges available. Please contact admin.
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
@@ -160,7 +162,7 @@ export default function SignupPage() {
                   minLength={6}
                 />
               </div>
-              <Button type="submit" className="w-full bg-primary" disabled={loading}>
+              <Button type="submit" className="w-full bg-primary" disabled={loading || !collegeId}>
                 {loading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
