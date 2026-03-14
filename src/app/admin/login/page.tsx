@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth, useFirestore } from '@/firebase';
-import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { signInWithEmailAndPassword } from 'firebase/auth';
 import { doc, getDoc, setDoc, Timestamp } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -30,28 +30,36 @@ export default function AdminLoginPage() {
     setError('');
     
     try {
-      // Logic to authenticate admin using a hidden email
       const result = await signInWithEmailAndPassword(auth, ADMIN_EMAIL, password);
       const user = result.user;
 
       if (user) {
-        const userSnap = await getDoc(doc(db, 'users', user.uid));
-        if (userSnap.exists() && userSnap.data().role === 'admin') {
-          router.push('/admin');
+        const userRef = doc(db, 'users', user.uid);
+        const userSnap = await getDoc(userRef);
+        
+        if (userSnap.exists()) {
+          if (userSnap.data().role === 'admin') {
+            router.push('/admin');
+          } else {
+            setError('Access Denied: Administrative privileges required.');
+            setLoading(false);
+          }
         } else {
-          // If the user exists but isn't an admin (shouldn't happen with this email)
-          await signOut(auth);
-          setError('Access Denied: Administrative privileges required.');
-          setLoading(false);
+          // Initialize admin profile if missing
+          await setDoc(userRef, {
+            id: user.uid,
+            email: ADMIN_EMAIL,
+            displayName: 'Admin',
+            role: 'admin',
+            collegeId: 'admin',
+            isBlocked: false,
+            createdAt: Timestamp.now(),
+          });
+          router.push('/admin');
         }
       }
     } catch (err: any) {
-      // If user not found, try to initialize it (one-time setup)
-      if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') {
-        setError('Access Denied: Invalid admin security key.');
-      } else {
-        setError('A security error occurred. Please try again.');
-      }
+      setError('Access Denied: Invalid admin security key.');
       setLoading(false);
     }
   };

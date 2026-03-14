@@ -1,11 +1,11 @@
 
 "use client"
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth, useFirestore, useUser } from '@/firebase';
-import { signInWithPopup, signOut, signInWithEmailAndPassword, GoogleAuthProvider } from 'firebase/auth';
+import { signInWithRedirect, getRedirectResult, GoogleAuthProvider, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { doc, getDoc, setDoc, Timestamp } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -26,6 +26,26 @@ export default function LoginPage() {
   const db = useFirestore();
   const { isUserLoading } = useUser();
 
+  // Handle Google Redirect result on component mount
+  useEffect(() => {
+    const checkRedirect = async () => {
+      try {
+        const result = await getRedirectResult(auth);
+        if (result?.user) {
+          if (!result.user.email?.endsWith('@neu.edu.ph')) {
+            await signOut(auth);
+            setError('Access restricted. Only @neu.edu.ph institutional emails are allowed.');
+            return;
+          }
+          await handleInstitutionalRedirect(result.user);
+        }
+      } catch (err: any) {
+        // Silently handle error or show a user-friendly message
+      }
+    };
+    checkRedirect();
+  }, [auth]);
+
   const handleInstitutionalRedirect = async (firebaseUser: any) => {
     const userRef = doc(db, 'users', firebaseUser.uid);
     try {
@@ -35,32 +55,23 @@ export default function LoginPage() {
         if (userData.isBlocked) {
           await signOut(auth);
           setError('Your account has been blocked. Please contact the administrator.');
-          setLoading(false);
           return;
         }
-        
-        if (userData.role === 'admin') {
-          router.push('/admin');
-        } else {
-          router.push('/dashboard');
-        }
+        router.push(userData.role === 'admin' ? '/admin' : '/dashboard');
       } else {
-        // Handle admin account initialization
         if (firebaseUser.email === ADMIN_EMAIL) {
           await setDoc(userRef, {
             id: firebaseUser.uid,
             email: ADMIN_EMAIL,
-            displayName: 'Library Admin',
+            displayName: 'Admin',
             role: 'admin',
-            collegeId: 'administration',
+            collegeId: 'admin',
             isBlocked: false,
             createdAt: Timestamp.now(),
           });
           router.push('/admin');
           return;
         }
-
-        // Student/Faculty profile completion
         const params = new URLSearchParams({
           email: firebaseUser.email || '',
           name: firebaseUser.displayName || '',
@@ -70,7 +81,6 @@ export default function LoginPage() {
       }
     } catch (e: any) {
       setError('A security restriction prevented your profile access.');
-      setLoading(false);
     }
   };
 
@@ -88,32 +98,12 @@ export default function LoginPage() {
     }
   };
 
-  const handleGoogleLogin = async () => {
+  const handleGoogleLogin = () => {
     setLoading(true);
     setError('');
-    const googleProvider = new GoogleAuthProvider();
-    googleProvider.setCustomParameters({ prompt: 'select_account' });
-    
-    try {
-      const result = await signInWithPopup(auth, googleProvider);
-      const user = result.user;
-      
-      if (!user.email?.endsWith('@neu.edu.ph')) {
-        await signOut(auth);
-        setError('Access restricted. Only @neu.edu.ph institutional emails are allowed.');
-        setLoading(false);
-        return;
-      }
-      
-      await handleInstitutionalRedirect(user);
-    } catch (err: any) {
-      if (err.code === 'auth/popup-closed-by-user') {
-        setError('Login cancelled. Please try again or check your browser settings.');
-      } else {
-        setError('Institutional login failed. Please try again.');
-      }
-      setLoading(false);
-    }
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
+    signInWithRedirect(auth, provider);
   };
 
   if (isUserLoading) {
@@ -141,7 +131,6 @@ export default function LoginPage() {
             <h1 className="font-headline font-bold text-3xl tracking-tight text-foreground">
               Welcome to NEU Library!
             </h1>
-            <p className="text-muted-foreground">StudyHub Visitor Management</p>
           </div>
         </div>
 
