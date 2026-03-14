@@ -2,9 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { auth, db } from '@/lib/firebase';
 import { collection, getDocs, doc, setDoc, deleteDoc, query, orderBy, Timestamp, getDoc } from 'firebase/firestore';
-import { useAuthState } from 'react-firebase-hooks/auth';
+import { useUser, useFirestore } from '@/firebase';
 import { Navbar } from '@/components/navbar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,7 +16,8 @@ import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 
 export default function AdminCollegesPage() {
-  const [user, loadingAuth] = useAuthState(auth);
+  const { user, isUserLoading: loadingAuth } = useUser();
+  const db = useFirestore();
   const [colleges, setColleges] = useState<College[]>([]);
   const [newCollegeName, setNewCollegeName] = useState('');
   const [loading, setLoading] = useState(true);
@@ -40,8 +40,10 @@ export default function AdminCollegesPage() {
         setLoading(false);
       }
     }
-    checkAuthAndFetch();
-  }, [user, router]);
+    if (!loadingAuth) {
+      checkAuthAndFetch();
+    }
+  }, [user, loadingAuth, router, db]);
 
   const addCollege = async (e: React.FormEvent) => {
     e.preventDefault();

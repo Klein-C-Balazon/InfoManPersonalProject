@@ -2,9 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { auth, db } from '@/lib/firebase';
 import { collection, getDocs, doc, updateDoc, getDoc, query, where } from 'firebase/firestore';
-import { useAuthState } from 'react-firebase-hooks/auth';
+import { useUser, useFirestore } from '@/firebase';
 import { Navbar } from '@/components/navbar';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
@@ -17,7 +16,8 @@ import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 
 export default function AdminUsersPage() {
-  const [user, loadingAuth] = useAuthState(auth);
+  const { user, isUserLoading: loadingAuth } = useUser();
+  const db = useFirestore();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -36,8 +36,10 @@ export default function AdminUsersPage() {
         await performSearch('');
       }
     }
-    fetchInitialUsers();
-  }, [user, router]);
+    if (!loadingAuth) {
+      fetchInitialUsers();
+    }
+  }, [user, loadingAuth, router, db]);
 
   const performSearch = async (term: string) => {
     setLoading(true);
@@ -67,15 +69,14 @@ export default function AdminUsersPage() {
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const term = e.target.value;
     setSearchTerm(term);
-    // Simple debounced-like effect or trigger on button
   };
 
-  const toggleBlock = async (uid: string, currentStatus: boolean) => {
+  const toggleBlock = async (id: string, currentStatus: boolean) => {
     try {
-      await updateDoc(doc(db, 'users', uid), {
+      await updateDoc(doc(db, 'users', id), {
         isBlocked: !currentStatus
       });
-      setUsers(prev => prev.map(u => u.uid === uid ? { ...u, isBlocked: !currentStatus } : u));
+      setUsers(prev => prev.map(u => u.id === id ? { ...u, isBlocked: !currentStatus } : u));
       toast({
         title: currentStatus ? "User Unblocked" : "User Blocked",
         description: `The user account access has been ${currentStatus ? 'restored' : 'revoked'}.`,
@@ -85,12 +86,12 @@ export default function AdminUsersPage() {
     }
   };
 
-  const promoteAdmin = async (uid: string) => {
+  const promoteAdmin = async (id: string) => {
     try {
-      await updateDoc(doc(db, 'users', uid), {
+      await updateDoc(doc(db, 'users', id), {
         role: 'admin'
       });
-      setUsers(prev => prev.map(u => u.uid === uid ? { ...u, role: 'admin' } : u));
+      setUsers(prev => prev.map(u => u.id === id ? { ...u, role: 'admin' } : u));
       toast({ title: "Promoted to Admin" });
     } catch (e) {
        toast({ variant: 'destructive', title: "Action Failed" });
@@ -159,14 +160,14 @@ export default function AdminUsersPage() {
                 </TableHeader>
                 <TableBody>
                   {users.map((u) => (
-                    <TableRow key={u.uid}>
+                    <TableRow key={u.id}>
                       <TableCell>
                         <div className="flex flex-col">
                           <span className="font-medium">{u.displayName}</span>
                           <span className="text-xs text-muted-foreground">{u.email}</span>
                         </div>
                       </TableCell>
-                      <TableCell>{u.college}</TableCell>
+                      <TableCell>{u.collegeId}</TableCell>
                       <TableCell>
                         <Badge variant={u.role === 'admin' ? 'default' : 'secondary'}>
                           {u.role}
@@ -178,14 +179,14 @@ export default function AdminUsersPage() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right space-x-2">
-                        {u.uid !== user?.uid && (
+                        {u.id !== user?.uid && (
                           <>
                             {u.role !== 'admin' && (
                               <Button 
                                 size="sm" 
                                 variant="outline" 
                                 title="Make Admin"
-                                onClick={() => promoteAdmin(u.uid)}
+                                onClick={() => promoteAdmin(u.id)}
                               >
                                 <Shield className="h-4 w-4" />
                               </Button>
@@ -194,7 +195,7 @@ export default function AdminUsersPage() {
                               size="sm" 
                               variant={u.isBlocked ? 'outline' : 'destructive'} 
                               title={u.isBlocked ? "Unblock User" : "Block User"}
-                              onClick={() => toggleBlock(u.uid, u.isBlocked)}
+                              onClick={() => toggleBlock(u.id, u.isBlocked)}
                             >
                               {u.isBlocked ? <UserCheck className="h-4 w-4" /> : <ShieldAlert className="h-4 w-4" />}
                             </Button>

@@ -2,9 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { auth, db } from '@/lib/firebase';
 import { collection, query, where, orderBy, getDocs, Timestamp } from 'firebase/firestore';
-import { useAuthState } from 'react-firebase-hooks/auth';
+import { useUser, useFirestore } from '@/firebase';
 import { Navbar } from '@/components/navbar';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -13,7 +12,8 @@ import { format } from 'date-fns';
 import { VisitLog } from '@/lib/models';
 
 export default function HistoryPage() {
-  const [user, loadingAuth] = useAuthState(auth);
+  const { user, isUserLoading: loadingAuth } = useUser();
+  const db = useFirestore();
   const [visits, setVisits] = useState<VisitLog[]>([]);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
@@ -35,8 +35,10 @@ export default function HistoryPage() {
         setLoading(false);
       }
     }
-    fetchVisits();
-  }, [user]);
+    if (!loadingAuth && user) {
+      fetchVisits();
+    }
+  }, [user, loadingAuth, db]);
 
   if (loadingAuth || loading) {
     return (
@@ -88,7 +90,7 @@ export default function HistoryPage() {
                           {v.purposeOfVisit}
                         </span>
                       </TableCell>
-                      <TableCell className="text-muted-foreground">{v.college}</TableCell>
+                      <TableCell className="text-muted-foreground">{v.collegeId}</TableCell>
                     </TableRow>
                   ))
                 ) : (

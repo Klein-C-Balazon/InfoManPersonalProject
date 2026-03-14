@@ -2,9 +2,8 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { auth, db } from '@/lib/firebase';
 import { collection, query, orderBy, getDocs, doc, getDoc, where, Timestamp } from 'firebase/firestore';
-import { useAuthState } from 'react-firebase-hooks/auth';
+import { useUser, useFirestore } from '@/firebase';
 import { Navbar } from '@/components/navbar';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -18,7 +17,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 type DateRange = 'today' | 'week' | 'month' | 'all';
 
 export default function AdminDashboard() {
-  const [user, loadingAuth] = useAuthState(auth);
+  const { user, isUserLoading: loadingAuth } = useUser();
+  const db = useFirestore();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [allVisits, setAllVisits] = useState<VisitLog[]>([]);
   const [loading, setLoading] = useState(true);
@@ -74,14 +74,16 @@ export default function AdminDashboard() {
         setLoading(false);
       }
     }
-    fetchAdminData();
-  }, [user, router, dateRange]);
+    if (!loadingAuth && user) {
+      fetchAdminData();
+    }
+  }, [user, loadingAuth, router, db, dateRange]);
 
   // Aggregate visits by College
   const collegeStats = useMemo(() => {
     const counts: Record<string, number> = {};
     allVisits.forEach(v => {
-      const collegeName = v.college || 'Unspecified';
+      const collegeName = v.collegeId || 'Unspecified';
       counts[collegeName] = (counts[collegeName] || 0) + 1;
     });
     return Object.entries(counts)
@@ -229,7 +231,7 @@ export default function AdminDashboard() {
                   {allVisits.slice(0, 8).map((v) => (
                     <TableRow key={v.id}>
                       <TableCell className="font-medium">{v.userDisplayName}</TableCell>
-                      <TableCell>{v.college}</TableCell>
+                      <TableCell>{v.collegeId}</TableCell>
                       <TableCell>
                         <span className="text-xs bg-muted px-2 py-1 rounded-full">{v.purposeOfVisit}</span>
                       </TableCell>

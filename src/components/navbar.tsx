@@ -3,17 +3,17 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { BookOpen, LogOut, User, LayoutDashboard, Settings, History, Shield } from 'lucide-react';
-import { auth } from '@/lib/firebase';
+import { BookOpen, LogOut, LayoutDashboard, History, Shield } from 'lucide-react';
 import { signOut } from 'firebase/auth';
-import { useAuthState } from 'react-firebase-hooks/auth';
 import { useEffect, useState } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { useUser, useFirestore, useAuth } from '@/firebase';
 import { UserProfile } from '@/lib/models';
 
 export function Navbar() {
-  const [user, loading] = useAuthState(auth);
+  const { user, isUserLoading: loading } = useUser();
+  const db = useFirestore();
+  const auth = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const pathname = usePathname();
   const router = useRouter();
@@ -30,8 +30,10 @@ export function Navbar() {
         setProfile(null);
       }
     }
-    fetchProfile();
-  }, [user]);
+    if (!loading) {
+      fetchProfile();
+    }
+  }, [user, loading, db]);
 
   const handleLogout = async () => {
     await signOut(auth);

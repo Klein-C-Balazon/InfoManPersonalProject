@@ -1,11 +1,9 @@
-
 "use client"
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { auth, db } from '@/lib/firebase';
-import { collection, addDoc, query, where, orderBy, limit, getDocs, doc, getDoc, Timestamp } from 'firebase/firestore';
-import { useAuthState } from 'react-firebase-hooks/auth';
+import { collection, addDoc, query, orderBy, getDocs, doc, getDoc, Timestamp } from 'firebase/firestore';
+import { useUser, useFirestore } from '@/firebase';
 import { Navbar } from '@/components/navbar';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -16,7 +14,8 @@ import { College, UserProfile } from '@/lib/models';
 import { useToast } from '@/hooks/use-toast';
 
 export default function DashboardPage() {
-  const [user, loadingAuth] = useAuthState(auth);
+  const { user, isUserLoading: loadingAuth } = useUser();
+  const db = useFirestore();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [colleges, setColleges] = useState<College[]>([]);
   const [purpose, setPurpose] = useState('');
@@ -44,17 +43,18 @@ export default function DashboardPage() {
         if (profileSnap.exists()) {
           const profileData = profileSnap.data() as UserProfile;
           if (profileData.isBlocked) {
-            await auth.signOut();
             router.push('/login?blocked=true');
             return;
           }
           setProfile(profileData);
-          setSelectedCollege(profileData.college || '');
+          setSelectedCollege(profileData.collegeId || '');
         }
       }
     }
-    fetchData();
-  }, [user, router]);
+    if (!loadingAuth && user) {
+      fetchData();
+    }
+  }, [user, loadingAuth, router, db]);
 
   const handleLogVisit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,7 +67,7 @@ export default function DashboardPage() {
         userDisplayName: profile?.displayName || user.displayName || 'Unknown Student',
         timestamp: Timestamp.now(),
         purposeOfVisit: purpose,
-        college: selectedCollege,
+        collegeId: selectedCollege,
       };
 
       await addDoc(collection(db, 'visits'), visitData);
