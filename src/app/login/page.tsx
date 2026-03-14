@@ -1,6 +1,7 @@
+
 "use client"
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth, useFirestore, useUser } from '@/firebase';
@@ -10,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
-import { BookOpen, AlertCircle, GraduationCap, Mail, Lock, Loader2 } from 'lucide-react';
+import { BookOpen, AlertCircle, GraduationCap, Mail, Lock, Loader2, ShieldCheck } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
@@ -25,7 +26,7 @@ export default function LoginPage() {
   
   const auth = useAuth();
   const db = useFirestore();
-  const { user, isUserLoading } = useUser();
+  const { isUserLoading } = useUser();
 
   const handleInstitutionalRedirect = async (firebaseUser: any) => {
     const userRef = doc(db, 'users', firebaseUser.uid);
@@ -130,7 +131,7 @@ export default function LoginPage() {
         <Card className="shadow-2xl border-primary/5 overflow-hidden rounded-3xl">
           <CardHeader className="bg-primary/5 pb-8 pt-10 text-center">
             <CardTitle className="text-2xl">Access Portal</CardTitle>
-            <CardDescription>Enter your institutional credentials</CardDescription>
+            <CardDescription>Student & Faculty Login</CardDescription>
           </CardHeader>
           <CardContent className="pt-8 px-8 space-y-6">
             {error && (
@@ -213,19 +214,15 @@ export default function LoginPage() {
               <GraduationCap className="h-5 w-5" />
               Sign in with Google Account
             </Button>
-
-            <div className="text-center">
-              <p className="text-xs text-muted-foreground">
-                Exclusively for @neu.edu.ph domain accounts
-              </p>
-            </div>
           </CardContent>
-          <CardFooter className="bg-secondary/20 flex flex-col gap-2 py-6">
+          <CardFooter className="bg-secondary/20 flex flex-col gap-3 py-6 text-center">
             <p className="text-sm text-muted-foreground">
               New here? <Link href="/signup" className="text-primary font-bold hover:underline">Create an account</Link>
             </p>
-            <Link href="/" className="text-sm text-muted-foreground hover:underline">
-              Return to Homepage
+            <Separator className="w-1/2 mx-auto" />
+            <Link href="/admin/login" className="flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors">
+              <ShieldCheck className="h-4 w-4" />
+              Library Administrator Access
             </Link>
           </CardFooter>
         </Card>

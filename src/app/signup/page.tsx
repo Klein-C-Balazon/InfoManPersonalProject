@@ -12,8 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { BookOpen, AlertCircle, Loader2, User, Shield } from 'lucide-react';
+import { BookOpen, AlertCircle, Loader2, User } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { College, UserRole } from '@/lib/models';
 import { errorEmitter } from '@/firebase/error-emitter';
@@ -25,7 +24,6 @@ export default function SignupPage() {
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [collegeId, setCollegeId] = useState('');
-  const [selectedRole, setSelectedRole] = useState<UserRole>('user');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   
@@ -61,16 +59,11 @@ export default function SignupPage() {
 
       await updateProfile(user, { displayName: name });
 
-      let role: UserRole = selectedRole;
-      if (email.toLowerCase() === 'admin@neu.edu.ph') {
-        role = 'admin';
-      }
-
       const newUser = {
         id: user.uid,
         email: user.email,
         displayName: name,
-        role: role,
+        role: 'user' as UserRole,
         collegeId: collegeId,
         isBlocked: false,
         createdAt: Timestamp.now(),
@@ -89,11 +82,7 @@ export default function SignupPage() {
         throw e;
       }
 
-      if (role === 'admin') {
-        router.push('/admin');
-      } else {
-        router.push('/dashboard');
-      }
+      router.push('/dashboard');
     } catch (err: any) {
       if (!(err instanceof FirestorePermissionError)) {
         if (err.code === 'auth/email-already-in-use') {
@@ -115,14 +104,14 @@ export default function SignupPage() {
             <BookOpen className="h-10 w-10 text-primary" />
             <span className="font-headline font-bold text-3xl tracking-tight text-primary">StudyHub</span>
           </Link>
-          <h2 className="text-2xl font-bold tracking-tight text-foreground">Create Institutional Account</h2>
+          <h2 className="text-2xl font-bold tracking-tight text-foreground">Student & Faculty Registration</h2>
           <p className="text-muted-foreground">Register your visitor profile for NEU Library</p>
         </div>
 
         <Card className="shadow-lg border-primary/10 rounded-2xl overflow-hidden">
-          <CardHeader className="bg-primary/5 pb-6">
-            <CardTitle>Register</CardTitle>
-            <CardDescription>All fields are required for institutional verification</CardDescription>
+          <CardHeader className="bg-primary/5 pb-6 text-center">
+            <CardTitle>Create Account</CardTitle>
+            <CardDescription>Institutional credentials required</CardDescription>
           </CardHeader>
           <CardContent className="pt-6">
             <form onSubmit={handleSignup} className="space-y-5">
@@ -133,37 +122,6 @@ export default function SignupPage() {
                   <AlertDescription>{error}</AlertDescription>
                 </Alert>
               )}
-
-              <div className="space-y-3">
-                <Label className="text-sm font-semibold">I am registering as:</Label>
-                <RadioGroup 
-                  defaultValue="user" 
-                  value={selectedRole} 
-                  onValueChange={(v) => setSelectedRole(v as UserRole)}
-                  className="grid grid-cols-2 gap-4"
-                >
-                  <div>
-                    <RadioGroupItem value="user" id="r-student" className="peer sr-only" />
-                    <Label
-                      htmlFor="r-student"
-                      className="flex flex-col items-center justify-between rounded-xl border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer"
-                    >
-                      <User className="mb-2 h-6 w-6" />
-                      <span className="text-xs font-bold uppercase">Student/Teacher</span>
-                    </Label>
-                  </div>
-                  <div>
-                    <RadioGroupItem value="admin" id="r-admin" className="peer sr-only" />
-                    <Label
-                      htmlFor="r-admin"
-                      className="flex flex-col items-center justify-between rounded-xl border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer"
-                    >
-                      <Shield className="mb-2 h-6 w-6" />
-                      <span className="text-xs font-bold uppercase">Admin</span>
-                    </Label>
-                  </div>
-                </RadioGroup>
-              </div>
 
               <div className="space-y-2">
                 <Label htmlFor="name">Full Name</Label>
@@ -225,13 +183,17 @@ export default function SignupPage() {
               </Button>
             </form>
           </CardContent>
-          <CardFooter className="flex justify-center border-t py-6 bg-secondary/10">
+          <CardFooter className="flex flex-col gap-3 justify-center border-t py-6 bg-secondary/10">
             <p className="text-sm text-muted-foreground">
               Already registered?{' '}
               <Link href="/login" className="text-primary font-bold hover:underline">
                 Log in here
               </Link>
             </p>
+            <Separator className="w-1/2" />
+            <Link href="/admin/login" className="text-xs text-muted-foreground hover:text-primary transition-colors">
+              Library Staff Portal
+            </Link>
           </CardFooter>
         </Card>
       </div>
