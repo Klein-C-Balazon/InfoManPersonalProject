@@ -1,12 +1,11 @@
-
 "use client"
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { auth } from '@/lib/firebase';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
-import { doc, setDoc, collection, query, orderBy, Timestamp, getDocs, limit } from 'firebase/firestore';
+import { doc, setDoc, collection, query, orderBy, Timestamp } from 'firebase/firestore';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,11 +20,11 @@ import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 
 export default function SignupPage() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
+  const [email, setEmail] = useState('admin@neu.edu.ph');
+  const [password, setPassword] = useState('123123');
+  const [name, setName] = useState('System Admin');
   const [collegeId, setCollegeId] = useState('');
-  const [selectedRole, setSelectedRole] = useState<UserRole>('user');
+  const [selectedRole, setSelectedRole] = useState<UserRole>('admin');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -40,8 +39,8 @@ export default function SignupPage() {
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!collegeId) {
-      setError('Please select your college.');
+    if (!collegeId && colleges && colleges.length > 0) {
+      setError('Please select your college affiliation.');
       return;
     }
     if (!email.endsWith('@neu.edu.ph')) {
@@ -57,7 +56,6 @@ export default function SignupPage() {
 
       await updateProfile(user, { displayName: name });
 
-      // Explicitly check for admin email, otherwise use selection
       let role: UserRole = selectedRole;
       if (email.toLowerCase() === 'admin@neu.edu.ph') {
         role = 'admin';
@@ -68,7 +66,7 @@ export default function SignupPage() {
         email: user.email,
         displayName: name,
         role: role,
-        collegeId: collegeId,
+        collegeId: collegeId || 'Institutional Admin',
         isBlocked: false,
         createdAt: Timestamp.now(),
       };
@@ -89,7 +87,11 @@ export default function SignupPage() {
       router.push('/dashboard');
     } catch (err: any) {
       if (!(err instanceof FirestorePermissionError)) {
-        setError(err.message || 'Failed to create account.');
+        if (err.code === 'auth/email-already-in-use') {
+          setError('This account already exists. Please log in instead.');
+        } else {
+          setError(err.message || 'Failed to create account.');
+        }
       }
     } finally {
       setLoading(false);
@@ -138,7 +140,7 @@ export default function SignupPage() {
                       className="flex flex-col items-center justify-between rounded-xl border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer"
                     >
                       <User className="mb-2 h-6 w-6" />
-                      <span className="text-xs font-bold uppercase">Student/Teacher</span>
+                      <span className="text-xs font-bold uppercase">Student</span>
                     </Label>
                   </div>
                   <div>
@@ -148,7 +150,7 @@ export default function SignupPage() {
                       className="flex flex-col items-center justify-between rounded-xl border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer"
                     >
                       <Shield className="mb-2 h-6 w-6" />
-                      <span className="text-xs font-bold uppercase">Administrator</span>
+                      <span className="text-xs font-bold uppercase">Admin</span>
                     </Label>
                   </div>
                 </RadioGroup>
@@ -181,7 +183,7 @@ export default function SignupPage() {
                 <Label htmlFor="college">Institutional Affiliation</Label>
                 <Select onValueChange={setCollegeId} value={collegeId}>
                   <SelectTrigger className="rounded-xl h-11">
-                    <SelectValue placeholder={loadingColleges ? "Loading colleges..." : "Select your college"} />
+                    <SelectValue placeholder={loadingColleges ? "Loading colleges..." : (colleges?.length ? "Select your college" : "Institutional Admin")} />
                   </SelectTrigger>
                   <SelectContent className="rounded-xl">
                     {colleges?.map((col) => (
@@ -189,14 +191,11 @@ export default function SignupPage() {
                         {col.name}
                       </SelectItem>
                     ))}
+                    {(!colleges || colleges.length === 0) && (
+                       <SelectItem value="Institutional Admin">Institutional Admin</SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
-                {!loadingColleges && (!colleges || colleges.length === 0) && (
-                  <p className="text-xs text-amber-600 flex items-center gap-1 mt-1">
-                    <AlertCircle className="h-3 w-3" />
-                    No colleges available. Contact system admin.
-                  </p>
-                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="password">Security Password</Label>
@@ -210,7 +209,7 @@ export default function SignupPage() {
                   minLength={6}
                 />
               </div>
-              <Button type="submit" className="w-full h-12 rounded-xl text-md font-bold" disabled={loading || !collegeId}>
+              <Button type="submit" className="w-full h-12 rounded-xl text-md font-bold" disabled={loading}>
                 {loading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />

@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { BookOpen, AlertCircle, GraduationCap, Mail, Lock } from 'lucide-react';
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Alert, AlertDescription, AlertTitle } from "@/components/alert";
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { Separator } from '@/components/ui/separator';
@@ -48,7 +48,7 @@ export default function LoginPage() {
       router.push('/dashboard');
     } else {
       await signOut(auth);
-      setError('Account not found. Please sign up first to register your institutional profile.');
+      setError('Profile not found. Please sign up first to register your institutional account.');
       setLoading(false);
     }
   };
@@ -61,7 +61,11 @@ export default function LoginPage() {
       const result = await signInWithEmailAndPassword(auth, email, password);
       await handleInstitutionalRedirect(result.user);
     } catch (err: any) {
-      setError('Invalid email or password. Please try again.');
+      if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
+        setError('Account not found or password incorrect. Please sign up first if you are new.');
+      } else {
+        setError('Login failed. Ensure you have registered your account.');
+      }
       setLoading(false);
     }
   };
@@ -115,6 +119,11 @@ export default function LoginPage() {
                 <AlertCircle className="h-4 w-4" />
                 <AlertTitle>Login Restriction</AlertTitle>
                 <AlertDescription>{error}</AlertDescription>
+                {error.includes('sign up') && (
+                  <Button variant="link" asChild className="p-0 h-auto text-destructive font-bold mt-2">
+                    <Link href="/signup">Go to Sign Up Page →</Link>
+                  </Button>
+                )}
               </Alert>
             )}
 
@@ -187,7 +196,7 @@ export default function LoginPage() {
           </CardContent>
           <CardFooter className="bg-secondary/20 flex flex-col gap-2 py-6">
             <p className="text-sm text-muted-foreground">
-              New here? <Link href="/signup" className="text-primary font-medium hover:underline">Create an account</Link>
+              New here? <Link href="/signup" className="text-primary font-bold hover:underline">Create an account</Link>
             </p>
             <Link href="/" className="text-sm text-muted-foreground hover:underline">
               Return to Homepage
