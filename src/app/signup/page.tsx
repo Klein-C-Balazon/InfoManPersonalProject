@@ -1,17 +1,19 @@
+
 "use client"
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { auth, db } from '@/lib/firebase';
+import { auth } from '@/lib/firebase';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
-import { doc, setDoc, collection, getDocs, query, orderBy, Timestamp } from 'firebase/firestore';
+import { doc, setDoc, collection, query, orderBy, Timestamp } from 'firebase/firestore';
+import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
-import { BookOpen, AlertCircle } from 'lucide-react';
+import { BookOpen, AlertCircle, Loader2 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { College } from '@/lib/models';
 import { errorEmitter } from '@/firebase/error-emitter';
@@ -22,20 +24,18 @@ export default function SignupPage() {
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [collegeId, setCollegeId] = useState('');
-  const [colleges, setColleges] = useState<College[]>([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const db = useFirestore();
 
-  useEffect(() => {
-    async function fetchColleges() {
-      const q = query(collection(db, 'colleges'), orderBy('name', 'asc'));
-      const querySnapshot = await getDocs(q);
-      const list = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as College));
-      setColleges(list);
-    }
-    fetchColleges();
-  }, []);
+  // Memoize the colleges query
+  const collegesQuery = useMemoFirebase(() => {
+    if (!db) return null;
+    return query(collection(db, 'colleges'), orderBy('name', 'asc'));
+  }, [db]);
+
+  const { data: colleges, isLoading: loadingColleges } = useCollection<College>(collegesQuery);
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -135,17 +135,16 @@ export default function SignupPage() {
                 <Label htmlFor="college">Institutional Affiliation</Label>
                 <Select onValueChange={setCollegeId} value={collegeId}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select your college" />
+                    <SelectValue placeholder={loadingColleges ? "Loading colleges..." : "Select your college"} />
                   </SelectTrigger>
                   <SelectContent>
-                    {colleges.length > 0 ? (
-                      colleges.map((col) => (
-                        <SelectItem key={col.id} value={col.name}>
-                          {col.name}
-                        </SelectItem>
-                      ))
-                    ) : (
-                      <SelectItem value="Default College" disabled>Loading colleges...</SelectItem>
+                    {colleges?.map((col) => (
+                      <SelectItem key={col.id} value={col.id}>
+                        {col.name}
+                      </SelectItem>
+                    ))}
+                    {!loadingColleges && (!colleges || colleges.length === 0) && (
+                      <SelectItem value="none" disabled>No colleges available</SelectItem>
                     )}
                   </SelectContent>
                 </Select>
@@ -162,7 +161,12 @@ export default function SignupPage() {
                 />
               </div>
               <Button type="submit" className="w-full bg-primary" disabled={loading}>
-                {loading ? 'Creating Account...' : 'Sign Up'}
+                {loading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Creating Account...
+                  </>
+                ) : 'Sign Up'}
               </Button>
             </form>
           </CardContent>

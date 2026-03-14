@@ -1,9 +1,10 @@
+
 "use client"
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { collection, addDoc, query, orderBy, getDocs, doc, getDoc, Timestamp } from 'firebase/firestore';
-import { useUser, useFirestore } from '@/firebase';
+import { collection, addDoc, query, orderBy, doc, getDoc, Timestamp } from 'firebase/firestore';
+import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { Navbar } from '@/components/navbar';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -17,13 +18,20 @@ export default function DashboardPage() {
   const { user, isUserLoading: loadingAuth } = useUser();
   const db = useFirestore();
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [colleges, setColleges] = useState<College[]>([]);
   const [purpose, setPurpose] = useState('');
-  const [selectedCollege, setSelectedCollege] = useState('');
+  const [selectedCollegeId, setSelectedCollegeId] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
+
+  // Memoize the colleges query
+  const collegesQuery = useMemoFirebase(() => {
+    if (!db) return null;
+    return query(collection(db, 'colleges'), orderBy('name', 'asc'));
+  }, [db]);
+
+  const { data: colleges, isLoading: loadingColleges } = useCollection<College>(collegesQuery);
 
   useEffect(() => {
     if (!loadingAuth && !user) {
@@ -32,13 +40,8 @@ export default function DashboardPage() {
   }, [user, loadingAuth, router]);
 
   useEffect(() => {
-    async function fetchData() {
-      if (user) {
-        // Fetch colleges
-        const collegeSnap = await getDocs(query(collection(db, 'colleges'), orderBy('name', 'asc')));
-        setColleges(collegeSnap.docs.map(d => ({ id: d.id, ...d.data() } as College)));
-
-        // Fetch profile
+    async function fetchProfile() {
+      if (user && db) {
         const profileSnap = await getDoc(doc(db, 'users', user.uid));
         if (profileSnap.exists()) {
           const profileData = profileSnap.data() as UserProfile;
@@ -47,19 +50,23 @@ export default function DashboardPage() {
             return;
           }
           setProfile(profileData);
-          setSelectedCollege(profileData.collegeId || '');
+          if (profileData.collegeId) {
+            setSelectedCollegeId(profileData.collegeId);
+          }
         }
       }
     }
     if (!loadingAuth && user) {
-      fetchData();
+      fetchProfile();
     }
-  }, [user, loadingAuth, router, db]);
+  }, [user, loadingAuth, db, router]);
 
   const handleLogVisit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!purpose || !selectedCollege || !user) return;
+    if (!purpose || !selectedCollegeId || !user) return;
     setSubmitting(true);
+
+    const collegeName = colleges?.find(c => c.id === selectedCollegeId)?.name || selectedCollegeId;
 
     try {
       const visitData = {
@@ -67,14 +74,14 @@ export default function DashboardPage() {
         userDisplayName: profile?.displayName || user.displayName || 'Unknown Student',
         timestamp: Timestamp.now(),
         purposeOfVisit: purpose,
-        collegeId: selectedCollege,
+        collegeId: selectedCollegeId, // Storing the ID for relational consistency
+        collegeName: collegeName // Denormalizing name for easy display in logs
       };
 
       await addDoc(collection(db, 'visits'), visitData);
       setShowSuccess(true);
       setPurpose('');
       
-      // Auto hide success after 5 seconds
       setTimeout(() => setShowSuccess(false), 5000);
 
     } catch (error) {
@@ -180,16 +187,19 @@ export default function DashboardPage() {
                       <GraduationCap className="h-4 w-4 text-primary" />
                       College Affiliation
                     </Label>
-                    <Select onValueChange={setSelectedCollege} value={selectedCollege}>
+                    <Select onValueChange={setSelectedCollegeId} value={selectedCollegeId}>
                       <SelectTrigger className="h-14 rounded-xl border-slate-200 focus:ring-primary/20">
-                        <SelectValue placeholder="Select your college" />
+                        <SelectValue placeholder={loadingColleges ? "Loading colleges..." : "Select your college"} />
                       </SelectTrigger>
                       <SelectContent className="rounded-xl">
-                        {colleges.map((col) => (
-                          <SelectItem key={col.id} value={col.name}>
+                        {colleges?.map((col) => (
+                          <SelectItem key={col.id} value={col.id}>
                             {col.name}
                           </SelectItem>
                         ))}
+                        {!loadingColleges && (!colleges || colleges.length === 0) && (
+                          <SelectItem value="none" disabled>No colleges available</SelectItem>
+                        )}
                       </SelectContent>
                     </Select>
                   </div>
@@ -199,7 +209,7 @@ export default function DashboardPage() {
                   type="submit" 
                   size="lg"
                   className="w-full h-16 rounded-2xl bg-primary hover:bg-primary/90 text-lg font-bold shadow-lg shadow-primary/20 transition-all flex items-center justify-center gap-2" 
-                  disabled={submitting || !purpose || !selectedCollege}
+                  disabled={submitting || !purpose || !selectedCollegeId}
                 >
                   {submitting ? (
                     <>
