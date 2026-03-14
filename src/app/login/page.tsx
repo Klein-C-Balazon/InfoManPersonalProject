@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth, useFirestore, useUser } from '@/firebase';
-import { signInWithPopup, signOut, signInWithEmailAndPassword, GoogleAuthProvider } from 'firebase/auth';
+import { signInWithPopup, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider } from 'firebase/auth';
 import { doc, getDoc, setDoc, Timestamp } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -49,6 +49,7 @@ export default function LoginPage() {
           router.push('/dashboard');
         }
       } else {
+        // Fallback for first-time admin creation via Auth
         if (firebaseUser.email === ADMIN_EMAIL) {
           await setDoc(userRef, {
             id: firebaseUser.uid,
@@ -95,11 +96,28 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     setError('');
+    
     try {
-      const result = await signInWithEmailAndPassword(auth, ADMIN_EMAIL, adminPassword);
-      await handleInstitutionalRedirect(result.user);
+      try {
+        const result = await signInWithEmailAndPassword(auth, ADMIN_EMAIL, adminPassword);
+        await handleInstitutionalRedirect(result.user);
+      } catch (signInError: any) {
+        // Auto-initialize admin if not found
+        if (signInError.code === 'auth/user-not-found' || signInError.code === 'auth/invalid-credential') {
+          try {
+            const userCredential = await createUserWithEmailAndPassword(auth, ADMIN_EMAIL, adminPassword);
+            await handleInstitutionalRedirect(userCredential.user);
+          } catch (createError: any) {
+            // If creation fails (e.g. wrong password for existing user), throw the original sign-in error
+            throw signInError;
+          }
+        } else {
+          throw signInError;
+        }
+      }
     } catch (err: any) {
-      setError('Access Denied: Invalid admin security key.');
+      console.error(err);
+      setError('Access Denied: Invalid admin security key. If you have used a different key before, please use that one.');
       setLoading(false);
     }
   };

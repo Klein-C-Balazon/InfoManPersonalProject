@@ -35,6 +35,7 @@ export default function AdminLoginPage() {
       } catch (signInError: any) {
         if (signInError.code === 'auth/user-not-found' || signInError.code === 'auth/invalid-credential') {
           try {
+            // Attempt auto-initialization
             const userCredential = await createUserWithEmailAndPassword(auth, ADMIN_EMAIL, password);
             const user = userCredential.user;
             
@@ -67,7 +68,7 @@ export default function AdminLoginPage() {
       }
     } catch (err: any) {
       console.error(err);
-      setError('Authentication failed. Please check your credentials.');
+      setError('Authentication failed. Ensure you are using the correct admin security key. Hint: Admin123');
       setLoading(false);
     }
   };
