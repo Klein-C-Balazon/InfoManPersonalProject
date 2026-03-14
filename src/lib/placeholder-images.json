@@ -1,3 +1,16 @@
 {
-  "placeholderImages": []
+  "placeholderImages": [
+    {
+      "id": "library-hero",
+      "description": "Modern library study area",
+      "imageUrl": "https://picsum.photos/seed/library1/1200/800",
+      "imageHint": "library study"
+    },
+    {
+      "id": "visitor-analytics",
+      "description": "Dashboard showing analytics graphs",
+      "imageUrl": "https://picsum.photos/seed/analytics1/800/600",
+      "imageHint": "data dashboard"
+    }
+  ]
 }
