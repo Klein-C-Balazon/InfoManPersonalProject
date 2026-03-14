@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect } from 'react';
@@ -10,13 +9,17 @@ import { doc, getDoc, setDoc, Timestamp } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
-import { BookOpen, AlertCircle, GraduationCap, Lock, Loader2, ShieldCheck, User, Sparkles } from 'lucide-react';
+import { BookOpen, AlertCircle, Loader2, Lock, User, Mail, GraduationCap } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from '@/components/ui/input';
+import { Separator } from '@/components/ui/separator';
 
-const ADMIN_EMAIL = 'admin@neu.edu.ph';
+const ADMIN_EMAIL = 'administrator@neu.edu.ph';
 
 export default function LoginPage() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -26,7 +29,6 @@ export default function LoginPage() {
   const db = useFirestore();
   const { isUserLoading } = useUser();
 
-  // Handle Google Redirect result on component mount
   useEffect(() => {
     const checkRedirect = async () => {
       try {
@@ -40,7 +42,7 @@ export default function LoginPage() {
           await handleInstitutionalRedirect(result.user);
         }
       } catch (err: any) {
-        // Silently handle error or show a user-friendly message
+        // Handle redirect errors silently
       }
     };
     checkRedirect();
@@ -59,6 +61,7 @@ export default function LoginPage() {
         }
         router.push(userData.role === 'admin' ? '/admin' : '/dashboard');
       } else {
+        // Auto-initialize admin if it's the admin identity
         if (firebaseUser.email === ADMIN_EMAIL) {
           await setDoc(userRef, {
             id: firebaseUser.uid,
@@ -84,6 +87,24 @@ export default function LoginPage() {
     }
   };
 
+  const handleStudentLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    try {
+      if (!email.endsWith('@neu.edu.ph')) {
+        setError('Only @neu.edu.ph accounts are permitted.');
+        setLoading(false);
+        return;
+      }
+      const result = await signInWithEmailAndPassword(auth, email, password);
+      await handleInstitutionalRedirect(result.user);
+    } catch (err: any) {
+      setError('Invalid institutional credentials.');
+      setLoading(false);
+    }
+  };
+
   const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -93,7 +114,19 @@ export default function LoginPage() {
       const result = await signInWithEmailAndPassword(auth, ADMIN_EMAIL, adminPassword);
       await handleInstitutionalRedirect(result.user);
     } catch (err: any) {
-      setError('Access Denied: Invalid admin security key.');
+      // Auto-initialize admin on first login attempt if it fails due to account not existing
+      if (err.code === 'auth/user-not-found' && adminPassword === 'Admin123') {
+        try {
+          // This would typically involve creating the user first, but for MVP we assume 
+          // the user manages Auth accounts or uses Google. 
+          // For a seamless "Admin123" experience, we'd need createUserWithEmailAndPassword.
+          setError('Admin account requires manual initialization or previous registration.');
+        } catch (initErr) {
+          setError('Access Denied: Administrative initialization failed.');
+        }
+      } else {
+        setError('Access Denied: Invalid admin security key.');
+      }
       setLoading(false);
     }
   };
@@ -115,39 +148,34 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4 md:p-6">
-      <div className="w-full max-w-md space-y-8">
-        <div className="text-center space-y-4">
-          <div className="flex justify-center">
-            <div className="p-4 bg-primary/10 rounded-2xl">
-              <BookOpen className="h-12 w-12 text-primary" />
+    <div className="min-h-screen flex flex-col items-center justify-center bg-[#f8fafc] p-4 md:p-6">
+      <div className="w-full max-w-md space-y-6">
+        <div className="text-center space-y-2">
+          <div className="flex justify-center mb-4">
+            <div className="p-3 bg-white border shadow-sm rounded-2xl">
+              <BookOpen className="h-10 w-10 text-primary" />
             </div>
           </div>
-          <div className="space-y-1">
-            <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-3 py-1 rounded-full text-xs font-bold mb-2">
-              <Sparkles className="h-3 w-3" />
-              Institutional Access
-            </div>
-            <h1 className="font-headline font-bold text-3xl tracking-tight text-foreground">
-              Welcome to NEU Library!
-            </h1>
-          </div>
+          <h1 className="font-headline font-bold text-4xl tracking-tight">
+            StudyHub <span className="text-[#3b82f6]">Tracker</span>
+          </h1>
+          <p className="text-slate-400 font-medium">NEU Library Visitor Portal</p>
         </div>
 
-        <Card className="shadow-2xl border-primary/5 overflow-hidden rounded-3xl">
-          <CardHeader className="bg-primary/5 pb-8 pt-10 text-center">
-            <CardTitle className="text-2xl">Access Portal</CardTitle>
-            <CardDescription>Sign in to continue</CardDescription>
+        <Card className="shadow-xl border-none overflow-hidden rounded-[2rem]">
+          <CardHeader className="bg-white pb-6 pt-10 text-center">
+            <CardTitle className="text-2xl font-bold">Access Portal</CardTitle>
+            <CardDescription className="text-slate-400">Select your access mode</CardDescription>
           </CardHeader>
-          <CardContent className="pt-4 px-8 space-y-6">
+          <CardContent className="px-8">
             <Tabs defaultValue="user" className="w-full">
-              <TabsList className="grid w-full grid-cols-2 mb-8 h-12 rounded-xl">
-                <TabsTrigger value="user" className="rounded-lg flex items-center gap-2">
+              <TabsList className="grid w-full grid-cols-2 mb-8 h-12 rounded-xl bg-slate-100 p-1">
+                <TabsTrigger value="user" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm flex items-center gap-2">
                   <User className="h-4 w-4" />
                   Student/Faculty
                 </TabsTrigger>
-                <TabsTrigger value="admin" className="rounded-lg flex items-center gap-2">
-                  <ShieldCheck className="h-4 w-4" />
+                <TabsTrigger value="admin" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm flex items-center gap-2">
+                  <Lock className="h-4 w-4" />
                   Admin
                 </TabsTrigger>
               </TabsList>
@@ -161,33 +189,79 @@ export default function LoginPage() {
               )}
 
               <TabsContent value="user" className="space-y-6">
+                <form onSubmit={handleStudentLogin} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Institutional Email</Label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                      <Input 
+                        id="email" 
+                        type="email" 
+                        placeholder="klein.balazon@neu.edu.ph" 
+                        className="pl-10 h-14 rounded-xl bg-slate-50 border-slate-200"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="password">Password</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                      <Input 
+                        id="password" 
+                        type="password" 
+                        placeholder="••••••••••••••••" 
+                        className="pl-10 h-14 rounded-xl bg-slate-50 border-slate-200"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                      />
+                    </div>
+                  </div>
+                  <Button 
+                    type="submit" 
+                    className="w-full h-14 text-md font-bold rounded-xl bg-[#2b5a9e] hover:bg-[#1e3f6e] text-white transition-all shadow-md" 
+                    disabled={loading}
+                  >
+                    {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Sign In'}
+                  </Button>
+                </form>
+
+                <div className="relative py-4">
+                  <div className="absolute inset-0 flex items-center">
+                    <Separator className="w-full" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-white px-2 text-slate-400 font-bold">OR CONTINUE WITH</span>
+                  </div>
+                </div>
+
                 <Button 
                   type="button" 
-                  variant="default"
+                  variant="outline"
                   size="lg"
-                  className="w-full h-14 text-md font-bold rounded-xl flex items-center justify-center gap-3 transition-all shadow-lg shadow-primary/20" 
+                  className="w-full h-14 text-md font-bold rounded-xl border-slate-200 hover:bg-slate-50 flex items-center justify-center gap-3 transition-all" 
                   onClick={handleGoogleLogin}
                   disabled={loading}
                 >
-                  {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <GraduationCap className="h-6 w-6" />}
+                  <GraduationCap className="h-6 w-6 text-slate-600" />
                   Sign in with Google Account
                 </Button>
-                <p className="text-center text-xs text-muted-foreground px-4">
-                  Use your @neu.edu.ph institutional account for automatic verification.
-                </p>
               </TabsContent>
 
-              <TabsContent value="admin" className="space-y-6 text-center">
+              <TabsContent value="admin" className="space-y-6">
                 <form onSubmit={handleAdminLogin} className="space-y-6">
-                  <div className="space-y-2 text-left">
+                  <div className="space-y-2">
                     <Label htmlFor="adminPassword">Security Key</Label>
                     <div className="relative">
-                      <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                      <input 
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                      <Input 
                         id="adminPassword" 
                         type="password" 
                         placeholder="••••••••" 
-                        className="flex h-12 w-full rounded-xl border border-input bg-background px-10 py-2 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="pl-10 h-14 rounded-xl bg-slate-50 border-slate-200"
                         value={adminPassword}
                         onChange={(e) => setAdminPassword(e.target.value)}
                         required 
@@ -199,15 +273,15 @@ export default function LoginPage() {
                     className="w-full h-14 font-bold rounded-xl bg-slate-900 hover:bg-slate-800 text-white shadow-xl" 
                     disabled={loading}
                   >
-                    {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Log In as Admin'}
+                    {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Log In as Admin'}
                   </Button>
                 </form>
               </TabsContent>
             </Tabs>
           </CardContent>
-          <CardFooter className="bg-secondary/20 flex flex-col gap-3 py-6 text-center">
-            <p className="text-sm text-muted-foreground">
-              New to the library? <Link href="/signup" className="text-primary font-bold hover:underline">Complete Registration →</Link>
+          <CardFooter className="flex flex-col gap-3 justify-center pb-10 pt-6">
+            <p className="text-sm text-slate-400">
+              New to the library? <Link href="/signup" className="text-[#2b5a9e] font-bold hover:underline">Create a student profile</Link>
             </p>
           </CardFooter>
         </Card>
